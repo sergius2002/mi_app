@@ -6,6 +6,10 @@ import ssl
 # Cargar variables de entorno
 load_dotenv()
 
+# Debug prints
+print("SUPABASE_URL:", os.getenv('SUPABASE_URL'))
+print("SUPABASE_KEY:", os.getenv('SUPABASE_KEY'))
+
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
 os.environ['TZ'] = os.getenv('TZ', 'America/Argentina/Buenos_Aires')
