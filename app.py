@@ -389,7 +389,10 @@ app.jinja_env.filters['format_decimal'] = format_decimal
 def filter_transferencias(query):
     cliente = request.args.get("cliente")
     if cliente:
-        query = query.ilike("cliente", f"%{cliente}%")
+        if cliente == "Desconocido":
+            query = query.is_("cliente", "null")
+        else:
+            query = query.ilike("cliente", f"%{cliente}%")
     rut = request.args.get("rut")
     if rut:
         query = query.ilike("rut", f"%{rut}%")
@@ -459,7 +462,7 @@ def index():
                 # Convertir los datos a su tipo correcto y manejar valores nulos
                 transfer_processed = {
                     'id': transfer.get('id'),
-                    'cliente': transfer.get('cliente') if transfer.get('cliente') is not None else '',
+                    'cliente': transfer.get('cliente') if transfer.get('cliente') is not None else 'Desconocido',
                     'empresa': transfer.get('empresa') if transfer.get('empresa') is not None else '',
                     'rut': transfer.get('rut') if transfer.get('rut') is not None else '',
                     'monto': float(transfer.get('monto', 0)),
