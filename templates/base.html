@@ -223,6 +223,18 @@
     });
 
     $(document).ready(function(){
+      // Inicializar AutoNumeric en campos con clase format-number
+      document.querySelectorAll('.format-number').forEach(function(input) {
+        new AutoNumeric(input, {
+          digitGroupSeparator: ',',
+          decimalPlaces: 0,
+          minimumValue: '0',
+          watchExternalChanges: true,
+          modifyValueOnWheel: false,
+          emptyInputBehavior: "zero"
+        });
+      });
+
       $('select.select-custom').select2({
         width: 'resolve',
         dropdownCssClass: "select2-dropdown-custom"
