@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Gestión de Scripts</h1>
+
+    <!-- Mensajes flash (notificaciones) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Tabla de scripts -->
+    <table class="table table-striped table-responsive">
+        <thead>
+            <tr>
+                <th>Nombre del Script</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for script_name, status in scripts.items() %}
+            <tr>
+                <td>{{ script_name }}</td>
+                <td>
+                    {% if status.running %}
+                        <span class="badge bg-success">Ejecutándose</span>
+                    {% else %}
+                        <span class="badge bg-danger">Detenido</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if status.running %}
+                        <form method="POST" action="{{ url_for('admin.stop_script', script_name=script_name) }}" style="display:inline;" onsubmit="return confirm('¿Estás seguro de que deseas detener este script?');">
+                            <button type="submit" class="btn btn-danger btn-sm">Detener</button>
+                        </form>
+                    {% else %}
+                        <form method="POST" action="{{ url_for('admin.start_script', script_name=script_name) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-success btn-sm">Iniciar</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

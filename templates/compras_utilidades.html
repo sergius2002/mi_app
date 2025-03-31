@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+<!-- Elemento de navegación -->
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('utilidades.compras') }}">Utilidades - Compras</a>
+</li>
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Compras de Fiat VES</h1>
+    <!-- Formulario para filtrar por fecha -->
+    <form method="GET" action="{{ url_for('utilidades.compras') }}" class="form-inline mb-3">
+        <div class="form-group">
+            <label for="fecha" class="mr-2">Fecha:</label>
+            <input type="date" id="fecha" name="fecha" value="{{ selected_date }}" class="form-control mr-2">
+        </div>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+    <!-- Tabla de registros -->
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Paymethod</th>
+                <th>Fecha</th>
+                <th>BRS</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if compras %}
+                {% for compra in compras %}
+                <tr>
+                    <td>{{ compra.paymethodname }}</td>
+                    <td>{{ compra.createtime | replace("T", " ") }}</td>
+                    <td>{{ '{:,}'.format(compra.totalprice | float | int) }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3">No se encontraron registros para la fecha seleccionada.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    <!-- Sección para mostrar el total acumulado de BRS sin decimales y con separador de miles -->
+    <div class="mt-3">
+        <h4>Total BRS: {{ '{:,}'.format(total_brs | int) }}</h4>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid mt-2">
+  <!-- Título principal de la página -->
+  <h1 class="mb-4">Pedidos</h1>
+  <!-- Botón para crear un nuevo pedido -->
+  <a href="{{ url_for('pedidos.nuevo') }}" class="btn btn-success mb-3">Nuevo Pedido</a>
+
+  <!-- Card que envuelve el formulario de filtrado y la tabla -->
+  <div class="card shadow-lg">
+    <div class="card-body">
+      <div class="row">
+        <!-- Columna izquierda: Formulario de Filtrado (más angosta) -->
+        <div class="col-md-3">
+          <form action="{{ url_for('pedidos.index') }}" method="get">
+            <div class="mb-3">
+              <label for="cliente_pedidos" class="form-label">Cliente</label>
+              <select name="cliente" id="cliente_pedidos" class="form-select">
+                <option value="">Seleccione cliente</option>
+                {% for client in cliente %}
+                  <option value="{{ client }}" {% if client in request.args.getlist('cliente') %}selected{% endif %}>
+                    {{ client }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="fecha" class="form-label">Fecha</label>
+              <input type="date" name="fecha" id="fecha" class="form-control" placeholder="Fecha (YYYY-MM-DD)" value="{{ request.args.get('fecha', current_date) }}">
+            </div>
+            <div class="mb-3">
+              <label for="brs" class="form-label">BRS</label>
+              <input type="text" name="brs" id="brs" class="form-control" placeholder="BRS" value="{{ request.args.get('brs','') }}">
+            </div>
+            <div class="mb-3">
+              <label for="clp" class="form-label">CLP</label>
+              <input type="text" name="clp" id="clp" class="form-control" placeholder="CLP" value="{{ request.args.get('clp','') }}">
+            </div>
+            <div class="mb-3">
+              <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+            </div>
+          </form>
+        </div>
+        <!-- Columna derecha: Tabla de Pedidos (más ancha) -->
+        <div class="col-md-9">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Fecha</th>
+                <th>BRS</th>
+                <th>Tasa</th>
+                <th>CLP</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in pedidos %}
+              <tr>
+                <td>{{ p.cliente }}</td>
+                <td>{{ p.fecha | format_date }}</td>
+                <td>{{ p.brs | format_int }}</td>
+                <td>{{ p.tasa | format_int }}</td>
+                <td>{{ p.clp | format_int }}</td>
+                <td>
+                  <a href="{{ url_for('pedidos.editar', pedido_id=p.id) }}" class="btn btn-sm btn-primary">Editar</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Script para inicializar Select2 en el select de clientes -->
+<script>
+$(document).ready(function(){
+  $('#cliente_pedidos').select2({
+    width: '100%',
+    placeholder: 'Seleccione un cliente',
+    allowClear: true,
+    minimumResultsForSearch: 0
+  });
+});
+</script>
+{% endblock %}

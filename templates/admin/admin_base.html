@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Módulo Restringido</li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row">
+    <!-- Menú lateral alineado con el contenido -->
+    <div class="col-md-3">
+      <div class="list-group admin-menu">
+        <a href="{{ url_for('admin.calcular_tasa') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.calcular_tasa' %}active{% endif %}">
+          <i class="fas fa-calculator"></i> Calcular tasa ponderada
+        </a>
+        <a href="{{ url_for('admin.cierre_dia') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.cierre_dia' %}active{% endif %}">
+          <i class="fas fa-calendar-check"></i> Realizar Cierre de Día
+        </a>
+        <a href="{{ url_for('admin.tasa_compras') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.tasa_compras' %}active{% endif %}">
+          <i class="fas fa-shopping-cart"></i> Tasa de Compras
+        </a>
+        <a href="{{ url_for('admin.ingresar_usdt') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.ingresar_usdt' %}active{% endif %}">
+          <i class="fas fa-dollar-sign"></i> Ingresar Compra USDT
+        </a>
+        <a href="{{ url_for('admin.tasa_actual') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.tasa_actual' %}active{% endif %}">
+          <i class="fas fa-chart-line"></i> Tasa actual
+        </a>
+        <!-- Nueva opción Margen -->
+        <a href="{{ url_for('admin.margen') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.margen' %}active{% endif %}">
+          <i class="fas fa-balance-scale"></i> Margen
+        </a>
+      </div>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="col-md-9">
+      <div class="content-header text-center mb-4">
+        <h1 class="text-azul-oscuro">{% block admin_title %}Módulo Restringido{% endblock %}</h1>
+      </div>
+      <div class="content-body">
+        {% block admin_content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

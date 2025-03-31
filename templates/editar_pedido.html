@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('pedidos.index') }}">Pedidos</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Editar Pedido</li>
+  </ol>
+</nav>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <h1 class="mb-4">Editar Pedido</h1>
+  <form id="form-editar-pedido" action="{{ url_for('pedidos.editar', pedido_id=pedido.id) }}" method="post" novalidate>
+    <div class="mb-3">
+      <label for="cliente" class="form-label">Cliente</label>
+      <select name="cliente" id="cliente" class="form-select" required>
+        <option value="">Seleccione un cliente</option>
+        {% for client in cliente_pagadores %}
+          <option value="{{ client }}" {% if client == pedido.cliente %}selected{% endif %}>{{ client }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="brs" class="form-label">BRS</label>
+      <input type="text" name="brs" id="brs" class="form-control" value="{{ pedido.brs }}" required>
+      <div id="brs-warning" class="form-text text-warning" style="display: none;">Advertencia: BRS superior a 50,000</div>
+    </div>
+    <div class="mb-3">
+      <label for="tasa" class="form-label">Tasa</label>
+      <input type="text" name="tasa" id="tasa" class="form-control" value="{{ pedido.tasa }}" required>
+      <div id="tasa-warning" class="form-text text-warning" style="display: none;">Advertencia: Valor de tasa fuera de rango</div>
+    </div>
+    <div class="mb-3">
+      <label for="fecha" class="form-label">Fecha</label>
+      <input type="date" name="fecha" id="fecha" class="form-control" value="{{ pedido.fecha }}" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Actualizar Pedido</button>
+  </form>
+  <h3 class="mt-4">Historial de Cambios</h3>
+  <ul>
+    {% for log in logs %}
+      <li>{{ log.fecha | format_datetime }} - {{ log.usuario }}: {{ log.cambios }}</li>
+    {% else %}
+      <li>No hay registros de modificaciones.</li>
+    {% endfor %}
+  </ul>
+</div>
+<script>
+$(document).ready(function(){
+  $('#cliente').select2({
+    width: '100%',
+    placeholder: 'Seleccione un cliente',
+    allowClear: true
+  });
+  new AutoNumeric('#brs', {
+    digitGroupSeparator: '.',
+    decimalCharacter: ',',
+    decimalPlaces: 0,
+    unformatOnSubmit: true
+  });
+  new AutoNumeric('#tasa', {
+    digitGroupSeparator: '.',
+    decimalCharacter: ',',
+    decimalPlaces: 6,
+    unformatOnSubmit: true
+  });
+  $('#form-editar-pedido').on('submit', function(e){
+    var cliente = $('#cliente').val();
+    var brs = $('#brs').val();
+    var tasa = $('#tasa').val();
+    var fecha = $('#fecha').val();
+    if(!cliente || !brs || !tasa || !fecha){
+      e.preventDefault();
+      toastr.error("Por favor, completa todos los campos requeridos.");
+    }
+  });
+});
+</script>
+{% endblock %}

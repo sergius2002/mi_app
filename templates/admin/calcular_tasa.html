@@ -1,0 +1,16 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Calcular Tasa Ponderada{% endblock %}
+
+{% block admin_content %}
+<div class="container">
+  <h2>Calcular Tasa Ponderada</h2>
+  <!-- Campo de fecha con autoenvío -->
+  <form method="get" action="{{ url_for('admin.calcular_tasa') }}">
+    <div class="mb-3">
+      <label for="fecha" class="form-label">Fecha:</label>
+      <input type="date" id="fecha" name="fecha" class="form-control" value="{{ selected_date }}" onchange="this.form.submit()">
+    </div>
+  </form>
+  <h3 class="mt-4">Tasa ponderada: {{ tasa_ponderada | format_decimal(6) }}</h3>
+</div>
+{% endblock %}
