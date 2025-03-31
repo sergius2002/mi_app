@@ -1,0 +1,73 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Tasa de Compras{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.index') }}">Tasa de Compras</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Tasa de Compras</li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block admin_content %}
+<div class="container mt-4">
+  <!-- Título centrado en azul oscuro -->
+  <div class="text-center mb-4">
+    <h1 class="text-azul-oscuro">Tasa de Compras</h1>
+  </div>
+
+  <!-- Tarjeta para el formulario de búsqueda, centrada -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('admin.tasa_compras') }}">
+        <div class="d-flex justify-content-center">
+          <div class="input-group" style="max-width: 400px;">
+            <input type="date" id="fecha" name="fecha" value="{{ fecha }}" class="form-control form-control-lg">
+            <button type="submit" class="btn btn-lg btn-custom">Buscar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tarjeta para mostrar la tabla de datos -->
+  <div class="card shadow-lg">
+
+    <div class="card-body">
+      {% if compras_data %}
+      <div class="table-responsive">
+        <table class="table table-hover table-bordered text-center mb-0">
+          <thead class="thead-light">
+            <tr>
+              <th>Banco</th>
+              <th>Tasa Compra</th>
+              <th>Brs</th>
+              <th>Hora</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in compras_data %}
+            <tr>
+              <td>{{ row.paymethodname }}</td>
+              <td>{{ row.tasa | format_decimal(6) }}</td> <!-- Muestra la tasa calculada -->
+              <td>{{ row.totalprice | format_int }}</td>
+              <td>{{ row.createtime | format_time }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="alert alert-warning text-center" role="alert">
+        No se encontraron datos para la vista de compras.
+      </div>
+      {% endif %}
+    </div>
+    <div class="card-footer text-center">
+      <a href="{{ url_for('admin.index') }}" class="btn btn-lg btn-custom">Volver</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

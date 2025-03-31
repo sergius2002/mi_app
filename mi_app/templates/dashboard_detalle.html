@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Detalle de {{ cliente }}</li>
+  </ol>
+</nav>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <h1 class="mb-4">Detalle de pedidos para {{ cliente }}</h1>
+  <p>Rango de fechas: {{ fecha_inicio }} a {{ fecha_fin }}</p>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Fecha</th>
+        <th>BRS</th>
+        <th>Tasa</th>
+        <th>CLP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pedido in pedidos %}
+      <tr>
+        <td>{{ pedido.id }}</td>
+        <td>{{ pedido.fecha | format_date }}</td>
+        <td>{{ pedido.brs | format_int }}</td>
+        <td>{{ pedido.tasa | format_int }}</td>
+        <td>{{ pedido.clp | format_int }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">No se encontraron pedidos.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <nav aria-label="Paginación">
+    <ul class="pagination">
+      {% if page > 1 %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('dashboard.detalle', cliente=cliente, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, page=page-1) }}">Anterior</a>
+      </li>
+      {% endif %}
+      {% for p in range(1, total_pages+1) %}
+      <li class="page-item {% if p == page %}active{% endif %}">
+        <a class="page-link" href="{{ url_for('dashboard.detalle', cliente=cliente, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, page=p) }}">{{ p }}</a>
+      </li>
+      {% endfor %}
+      {% if page < total_pages %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('dashboard.detalle', cliente=cliente, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, page=page+1) }}">Siguiente</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  <div class="mt-4">
+    <a href="{{ url_for('dashboard.index', fecha_inicio=fecha_inicio, fecha_fin=fecha_fin) }}" class="btn btn-secondary">Volver al Dashboard</a>
+  </div>
+</div>
+{% endblock %}

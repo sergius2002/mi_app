@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <h1 class="mb-4">Editar Transferencia</h1>
+  <form id="form-editar-transferencia" action="{{ url_for('transferencias.editar_transferencia', transfer_id=transferencia.id) }}" method="post" novalidate>
+    <div class="mb-3">
+      <label for="cliente" class="form-label">Cliente</label>
+      <select name="cliente" id="cliente" class="form-select" required>
+         <option value="">Seleccione un cliente</option>
+         {% for c in cliente_pagadores %}
+            <option value="{{ c }}" {% if c == transferencia.cliente %}selected{% endif %}>{{ c }}</option>
+         {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="empresa" class="form-label">Empresa</label>
+      <select name="empresa" id="empresa" class="form-select" required>
+         <option value="">Seleccione una opción</option>
+         {% for op in empresa_options %}
+            <option value="{{ op }}" {% if op == transferencia.empresa %}selected{% endif %}>{{ op }}</option>
+         {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="rut" class="form-label">Rut</label>
+      <input type="text" name="rut" id="rut" class="form-control" value="{{ transferencia.rut }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="monto" class="form-label">Monto</label>
+      <input type="text" name="monto" id="monto" class="form-control" value="{{ transferencia.monto }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="fecha" class="form-label">Fecha</label>
+      <input type="date" name="fecha" id="fecha" class="form-control" value="{{ current_date }}" required>
+    </div>
+    <div class="mb-3 form-check">
+      <input type="checkbox" class="form-check-input" id="verificada" name="verificada" {% if transferencia.verificada %}checked{% endif %}>
+      <label class="form-check-label" for="verificada">Verificada</label>
+    </div>
+    <button type="submit" class="btn btn-primary">Actualizar Transferencia</button>
+  </form>
+</div>
+
+<script>
+$(document).ready(function(){
+  $('#cliente').select2({
+    width: '100%',
+    placeholder: 'Seleccione un cliente',
+    allowClear: true,
+    minimumResultsForSearch: 0
+  });
+  $('#form-editar-transferencia').on('submit', function(e){
+    var cliente = $('#cliente').val();
+    var empresa = $('#empresa').val();
+    var rut = $('#rut').val();
+    var monto = $('#monto').val();
+    var fecha = $('#fecha').val();
+    if(!cliente || !empresa || !rut || !monto || !fecha){
+      e.preventDefault();
+      toastr.error("Por favor, completa todos los campos requeridos.");
+    }
+  });
+});
+</script>
+{% endblock %}

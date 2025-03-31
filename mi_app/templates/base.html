@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title if title else "Mi App" }}</title>
+
+  <!-- FontAwesome para los íconos -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Select2 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <!-- Toastr CSS -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet" />
+  <!-- Archivo de estilos personalizado -->
+  <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+
+  <style>
+    /* Contenedor flotante del gráfico con fondo transparente */
+    #grafico-flotante {
+      position: fixed;
+      bottom: 20px; /* Posicionado en la parte inferior */
+      right: 20px;  /* Posicionado en la esquina derecha */
+      width: 400px;
+      background: transparent; /* Fondo del contenedor transparente */
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      z-index: 1050;
+      padding: 10px;
+      overflow: hidden;
+    }
+    /* Botón de cerrar */
+    #grafico-flotante .control-btn {
+      position: absolute;
+      top: 5px;
+      cursor: pointer;
+      color: #333;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 2px 5px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 14px;
+    }
+    #grafico-flotante .close-btn {
+      right: 5px;
+    }
+    /* Wrapper para el gráfico: zona donde se muestran las líneas con mayor transparencia */
+    .chart-wrapper {
+      background: rgba(255, 255, 255, 0.1); /* Mayor transparencia */
+      padding: 5px;
+      border-radius: 5px;
+    }
+    /* Handle para redimensionar */
+    .resize-handle {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      right: 0;
+      bottom: 0;
+      cursor: se-resize;
+      background: transparent;
+    }
+  </style>
+</head>
+<body class="container">
+  <!-- Menú de navegación -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+    <a class="navbar-brand" href="#">Mi App</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <a class="nav-link {% if active_page=='transferencias' %}active{% endif %}" href="{{ url_for('transferencias.index') }}">
+            <i class="fas fa-exchange-alt"></i> Transferencias
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if active_page=='pedidos' %}active{% endif %}" href="{{ url_for('pedidos.index') }}">
+            <i class="fas fa-box"></i> Pedidos
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if active_page=='dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+          </a>
+        </li>
+        {% if is_admin %}
+          <li class="nav-item">
+            <a class="nav-link {% if active_page=='admin' %}active{% endif %}" href="{{ url_for('admin.index') }}">
+              <i class="fas fa-user-shield"></i> Módulo Restringido
+            </a>
+          </li>
+        {% endif %}
+        <li class="nav-item">
+          <a class="nav-link {% if active_page=='utilidades' %}active{% endif %}" href="{{ url_for('utilidades.index') }}">
+            <i class="fas fa-cogs"></i> Utilidades
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if active_page=='grafico' %}active{% endif %}" href="{{ url_for('grafico.index') }}">
+            <i class="fas fa-chart-line"></i> Gráficos
+          </a>
+        </li>
+      </ul>
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link btn btn-danger text-white" href="{{ url_for('logout') }}" onclick="return confirm('¿Estás seguro de cerrar sesión?');">
+            Cerrar Sesión
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  {% block breadcrumbs %}{% endblock %}
+  {% block content %}{% endblock %}
+
+  <!-- Spinner de carga (overlay) -->
+  <div id="spinner-overlay" style="display: none;">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Cargando...</span>
+    </div>
+  </div>
+
+  <!-- Contenedor flotante del gráfico -->
+  <div id="grafico-flotante" data-x="0" data-y="0">
+    <!-- Botón de cerrar -->
+    <span class="control-btn close-btn">×</span>
+    <!-- Wrapper para el gráfico con fondo semitransparente -->
+    <div class="chart-wrapper">
+      <img src="{{ url_for('grafico.plot_png') }}" alt="Gráfico en tiempo real" style="width: 100%;">
+    </div>
+    <!-- Handle para redimensionar -->
+    <div class="resize-handle"></div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/autonumeric@4.6.0/dist/autoNumeric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Librería interact.js para mover y redimensionar -->
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+
+  <script>
+    $(document).ready(function(){
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          {% for message in messages %}
+            toastr.options = {
+              "closeButton": true,
+              "progressBar": true,
+              "positionClass": "toast-top-right",
+              "timeOut": "5000"
+            };
+            toastr.info("{{ message }}");
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      $(document).ajaxStart(function(){
+        $("#spinner-overlay").show();
+      }).ajaxStop(function(){
+        $("#spinner-overlay").hide();
+      });
+
+      // Cerrar el contenedor flotante
+      $('.close-btn').click(function(){
+        $('#grafico-flotante').hide();
+      });
+
+      // Actualización periódica del gráfico (cada 30 segundos)
+      setInterval(function(){
+        var img = $('#grafico-flotante img');
+        img.attr('src', "{{ url_for('grafico.plot_png') }}?t=" + new Date().getTime());
+      }, 30000);
+
+      // Inicializamos interact.js para mover y redimensionar el contenedor
+      interact('#grafico-flotante')
+        .draggable({
+          inertia: true,
+          modifiers: [
+            interact.modifiers.restrictRect({
+              restriction: 'parent',
+              endOnly: true
+            })
+          ],
+          listeners: { move: dragMoveListener }
+        })
+        .resizable({
+          edges: { left: true, right: true, bottom: true, top: true },
+          inertia: true,
+          modifiers: [
+            interact.modifiers.restrictSize({
+              min: { width: 300, height: 200 }
+            })
+          ],
+          listeners: {
+            move (event) {
+              var target = event.target;
+              var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.deltaRect.left;
+              var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.deltaRect.top;
+              target.style.width  = event.rect.width + 'px';
+              target.style.height = event.rect.height + 'px';
+              target.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+              target.setAttribute('data-x', x);
+              target.setAttribute('data-y', y);
+            }
+          }
+        });
+
+      function dragMoveListener (event) {
+        var target = event.target;
+        var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+        var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+        target.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+        target.setAttribute('data-x', x);
+        target.setAttribute('data-y', y);
+      }
+    });
+
+    $(document).ready(function(){
+      $('select.select-custom').select2({
+        width: 'resolve',
+        dropdownCssClass: "select2-dropdown-custom"
+      });
+    });
+
+    $(window).scroll(function() {
+      if ($(this).scrollTop() > 50) {
+        $('.navbar').addClass('scrolled');
+      } else {
+        $('.navbar').removeClass('scrolled');
+      }
+    });
+  </script>
+</body>
+</html>

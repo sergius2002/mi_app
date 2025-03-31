@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+  </ol>
+</nav>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <h1 class="mb-4">Dashboard</h1>
+  <p>Fecha actual: {{ current_date }}</p>
+  <form method="get" action="{{ url_for('dashboard.index') }}">
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <label for="fecha_inicio" class="form-label">Fecha Inicio:</label>
+        <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" value="{{ request.args.get('fecha_inicio', current_date) }}">
+      </div>
+      <div class="col-md-3">
+        <label for="fecha_fin" class="form-label">Fecha Fin:</label>
+        <input type="date" name="fecha_fin" id="fecha_fin" class="form-control" value="{{ request.args.get('fecha_fin', current_date) }}">
+      </div>
+      <div class="col-md-3 align-self-end">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </div>
+    </div>
+  </form>
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card text-white bg-primary mb-3">
+        <div class="card-header">Total BRS</div>
+        <div class="card-body">
+          <h5 class="card-title">{{ global_total_brs | format_int }}</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-success mb-3">
+        <div class="card-header">Total CLP</div>
+        <div class="card-body">
+          <h5 class="card-title">{{ global_total_clp | format_int }}</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-info mb-3">
+        <div class="card-header">Total Pagos</div>
+        <div class="card-body">
+          <h5 class="card-title">{{ global_total_pagos | format_int }}</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-warning mb-3">
+        <div class="card-header">Saldo</div>
+        <div class="card-body">
+          <h5 class="card-title">{{ global_total_saldo | format_int }}</h5>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <canvas id="dashboardChart"></canvas>
+    </div>
+  </div>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Total BRS</th>
+        <th>Total CLP</th>
+        <th>Total Pagos</th>
+        <th>Saldo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in dashboard_list %}
+      <tr>
+        <td>
+          <a href="{{ url_for('dashboard.detalle', cliente=item.cliente, fecha_inicio=request.args.get('fecha_inicio', current_date), fecha_fin=request.args.get('fecha_fin', current_date)) }}">
+            {{ item.cliente }}
+          </a>
+        </td>
+        <td>{{ item.total_brs | format_int }}</td>
+        <td>{{ item.total_clp | format_int }}</td>
+        <td>{{ item.total_pagos | format_int }}</td>
+        <td>{{ item.saldo | format_int }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5">No hay datos para mostrar.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  var ctx = document.getElementById('dashboardChart').getContext('2d');
+  var labels = [{% for item in dashboard_list %}"{{ item.cliente }}",{% endfor %}];
+  var totalBRS = [{% for item in dashboard_list %}{{ item.total_brs }},{% endfor %}];
+  var totalCLP = [{% for item in dashboard_list %}{{ item.total_clp }},{% endfor %}];
+  var totalPagos = [{% for item in dashboard_list %}{{ item.total_pagos }},{% endfor %}];
+  var saldo = [{% for item in dashboard_list %}{{ item.saldo }},{% endfor %}];
+  var dashboardChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Total BRS',
+          data: totalBRS,
+          backgroundColor: 'rgba(54, 162, 235, 0.6)'
+        },
+        {
+          label: 'Total CLP',
+          data: totalCLP,
+          backgroundColor: 'rgba(75, 192, 192, 0.6)'
+        },
+        {
+          label: 'Total Pagos',
+          data: totalPagos,
+          backgroundColor: 'rgba(153, 102, 255, 0.6)'
+        },
+        {
+          label: 'Saldo',
+          data: saldo,
+          backgroundColor: 'rgba(255, 159, 64, 0.6)'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        title: { display: true, text: 'Resumen por Cliente' }
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

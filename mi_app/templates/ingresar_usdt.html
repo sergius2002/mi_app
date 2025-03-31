@@ -1,0 +1,64 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Ingresar Compra USDT{% endblock %}
+{% block admin_title %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.index') }}">Módulo Restringido</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Ingresar Compra USDT</li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid mt-2">
+  <div class="row justify-content-center">
+    <div class="col-lg-6 col-md-8">
+      <div class="card shadow-lg">
+        <!-- Cabecera del card con el título único -->
+        <div class="card-header bg-azul-oscuro text-white text-center">
+          <h3 class="mb-0">Ingresar Compra de USDT</h3>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('admin.ingresar_usdt') }}">
+            <div class="mb-3">
+              <label for="totalprice" class="form-label">Total Price</label>
+              <input type="text" name="totalprice" id="totalprice" class="form-control" placeholder="Ej: 1.000.000" required>
+            </div>
+            <div class="mb-3">
+              <label for="tasa" class="form-label">Tasa</label>
+              <input type="number" step="0.000001" name="tasa" id="tasa" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="tradetype" class="form-label">Trade Type</label>
+              <select name="tradetype" id="tradetype" class="form-select select-custom" required>
+                {% for option in tradetype_options %}
+                  <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="fiat" class="form-label">Fiat</label>
+              <select name="fiat" id="fiat" class="form-select select-custom" required>
+                {% for option in fiat_options %}
+                  <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="createtime" class="form-label">Fecha y Hora</label>
+              <input type="datetime-local" name="createtime" id="createtime" class="form-control" value="{{ current_datetime }}" required>
+            </div>
+            <button type="submit" class="btn btn-lg btn-custom w-100">Ingresar Compra de USDT</button>
+          </form>
+        </div>
+        <div class="card-footer text-center">
+          <a href="{{ url_for('admin.index') }}" class="btn btn-lg btn-custom">Volver</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

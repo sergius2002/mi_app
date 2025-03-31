@@ -1,0 +1,12 @@
+{% extends "admin/admin_base.html" %}
+
+{% block admin_title %}Resultado del Margen{% endblock %}
+
+{% block admin_content %}
+<div class="container mt-4">
+  <h2>Resultado del Cálculo de Margen</h2>
+  <p>Fecha seleccionada: {{ fecha }}</p>
+  <p>Margen calculado: {{ margin }}</p>
+  <a href="{{ url_for('admin.margen') }}" class="btn btn-secondary">Volver</a>
+</div>
+{% endblock %}
