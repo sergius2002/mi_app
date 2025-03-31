@@ -38,4 +38,7 @@ data_tasas.csv
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Environment variables
+margen 
