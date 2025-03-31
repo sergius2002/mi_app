@@ -17,3 +17,4 @@ itsdangerous
 plotly
 pillow
 python-telegram-bot
+matplotlib
