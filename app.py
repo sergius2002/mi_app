@@ -12,11 +12,11 @@ print("SUPABASE_KEY:", os.getenv('SUPABASE_KEY'))
 
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
-os.environ['TZ'] = os.getenv('TZ', 'America/Santiago')
+os.environ['TZ'] = 'America/Santiago'
 time.tzset()
 
 import pytz
-local_tz = pytz.timezone(os.getenv('TZ', 'America/Santiago'))
+local_tz = pytz.timezone('America/Santiago')
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app
 from supabase import create_client, Client
@@ -207,11 +207,9 @@ def actualizar_datos():
     else:
         precios_provincial.append(precios_provincial[-1] if precios_provincial else 0)
 
+    # Guardar datos con la hora local
     guardar_datos_csv(tiempo_str, precios_banesco[-1], precios_bank_transfer[-1], 
                      precios_mercantil[-1], precios_provincial[-1])
-
-    # La lógica de límite de 50 elementos ha sido eliminada
-
 
 def generar_grafico():
     try:
