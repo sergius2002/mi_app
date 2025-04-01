@@ -5,4 +5,4 @@ while true; do
     python envio_tasas.py
     echo "Bot de tasas se detuvo. Reiniciando en 60 segundos..."
     sleep 60
-done 
+done

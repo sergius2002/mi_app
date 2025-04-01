@@ -5,4 +5,4 @@ while true; do
     python binancetelegram.py
     echo "Bot de Binance se detuvo. Reiniciando en 60 segundos..."
     sleep 60
-done 
+done
