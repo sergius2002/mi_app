@@ -883,7 +883,11 @@ def calcular_tasa():
 def ingresar_usdt():
     if request.method == "POST":
         try:
-            totalprice_str = request.form.get("totalprice")
+            totalprice_str = request.form.get("totalprice", "")
+            if not totalprice_str:
+                flash("El campo Total Price es requerido.")
+                return redirect(url_for("admin.ingresar_usdt"))
+            
             totalprice = float(totalprice_str.replace(".", "").replace(",", ".").strip())
             tasa_str = request.form.get("tasa")
             tasa = float(tasa_str)
@@ -922,12 +926,19 @@ def ingresar_usdt():
             logging.error("Error al ingresar compra de USDT: %s", e)
             flash("Error al ingresar la compra de USDT: " + str(e))
             return redirect(url_for("admin.ingresar_usdt"))
+    
     # Asegurarse de que la fecha actual está en la zona horaria correcta
     current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
     tradetype_options = ["BUY", "SELL"]
     fiat_options = ["CLP", "VES", "USD"]
-    return render_template("ingresar_usdt.html", active_page="admin", current_datetime=current_datetime,
-                           tradetype_options=tradetype_options, fiat_options=fiat_options)
+    
+    # Renderizar el template sin valor por defecto para totalprice
+    return render_template("ingresar_usdt.html", 
+                         active_page="admin", 
+                         current_datetime=current_datetime,
+                         tradetype_options=tradetype_options, 
+                         fiat_options=fiat_options,
+                         totalprice="")  # Enviamos un string vacío explícitamente
 
 @admin_bp.route("/tasa_actual", methods=["GET"])
 @login_required

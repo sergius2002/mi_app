@@ -24,8 +24,16 @@
         <div class="card-body">
           <form method="post" action="{{ url_for('admin.ingresar_usdt') }}">
             <div class="mb-3">
-              <label for="totalprice" class="form-label">Total Price</label>
-              <input type="text" name="totalprice" id="totalprice" class="form-control" placeholder="Ej: 1.000.000" required>
+              <label for="totalprice_display" class="form-label">Total Price</label>
+              <!-- Campo visible para el usuario -->
+              <input type="text" 
+                     class="form-control" 
+                     id="totalprice_display" 
+                     autocomplete="off" 
+                     placeholder="Ingrese el monto"
+                     inputmode="numeric">
+              <!-- Campo oculto real para el formulario -->
+              <input type="hidden" id="totalprice" name="totalprice" required>
             </div>
             <div class="mb-3">
               <label for="tasa" class="form-label">Tasa</label>
@@ -61,4 +69,32 @@
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const displayInput = document.getElementById('totalprice_display');
+    const hiddenInput = document.getElementById('totalprice');
+    
+    // Formatear número mientras se escribe en el campo visible
+    displayInput.addEventListener('input', function(e) {
+        let value = this.value.replace(/[^\d]/g, '');
+        if (value) {
+            // Formatear para mostrar
+            this.value = parseInt(value, 10).toLocaleString('es-CL');
+            // Guardar valor sin formato en el campo oculto
+            hiddenInput.value = value;
+        } else {
+            hiddenInput.value = '';
+        }
+    });
+
+    // Validar el formulario antes de enviar
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!hiddenInput.value) {
+            e.preventDefault();
+            alert('Por favor, ingrese un monto válido');
+        }
+    });
+});
+</script>
 {% endblock %}
