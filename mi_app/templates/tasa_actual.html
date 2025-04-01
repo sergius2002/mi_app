@@ -23,15 +23,15 @@
             </div>
             <div class="mb-4 text-center">
               <label class="form-label fw-bold">Banesco:</label>
-              <p class="display-4">{{ resultado_banesco|round(6) }}</p>
+              <p class="display-4">{% if resultado_banesco is not none %}{{ resultado_banesco|round(6) }}{% else %}No disponible{% endif %}</p>
             </div>
             <div class="mb-4 text-center">
               <label class="form-label fw-bold">Venezuela:</label>
-              <p class="display-4">{{ resultado_bank|round(6) }}</p>
+              <p class="display-4">{% if resultado_bank is not none %}{{ resultado_bank|round(6) }}{% else %}No disponible{% endif %}</p>
             </div>
           {% else %}
-            <div class="alert alert-warning" role="alert">
-              No se encontró ningún registro para mostrar la tasa actual.
+            <div class="alert alert-warning text-center">
+              No hay datos disponibles en este momento.
             </div>
           {% endif %}
         </div>

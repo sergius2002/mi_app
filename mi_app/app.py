@@ -797,19 +797,7 @@ admin_bp = Blueprint("admin", __name__)
 @login_required
 @user_allowed
 def index():
-    selected_date = request.args.get("fecha")
-    if not selected_date:
-        selected_date = datetime.now(local_tz).strftime("%Y-%m-%d")
-    try:
-        rpc_response = supabase.rpc("get_tasa_ponderada_por_dia", {"p_fecha": selected_date}).execute()
-        tasa_ponderada = rpc_response.data if rpc_response.data is not None else 0
-    except Exception as e:
-        logging.error("Error al calcular tasa ponderada por día: %s", e)
-        tasa_ponderada = "Error"
-    return render_template("admin/calcular_tasa.html",
-                           active_page="admin",
-                           tasa_ponderada=tasa_ponderada,
-                           selected_date=selected_date)
+    return redirect(url_for('admin.tasa_compras'))
 
 @admin_bp.route("/calcular_margen", methods=["GET"])
 @login_required
@@ -951,14 +939,22 @@ def tasa_actual():
     if costo_no_vendido is not None:
         try:
             async def obtener_valores():
+                logging.info("Intentando obtener valor de Banesco...")
                 banesco_val = await obtener_valor_usdt_por_banco("Banesco")
+                logging.info(f"Valor de Banesco obtenido: {banesco_val}")
+                
+                logging.info("Intentando obtener valor de BANK...")
                 bank_val = await obtener_valor_usdt_por_banco("BANK")
+                logging.info(f"Valor de BANK obtenido: {bank_val}")
+                
                 return banesco_val, bank_val
             banesco_val, bank_val = asyncio.run(obtener_valores())
             if banesco_val and bank_val:
                 resultado_banesco = round(float(banesco_val) / float(costo_no_vendido), 6)
                 resultado_bank = round(float(bank_val) / float(costo_no_vendido), 6)
+                logging.info(f"Tasas calculadas - Banesco: {resultado_banesco}, Venezuela: {resultado_bank}")
             else:
+                logging.warning("No se pudieron obtener los valores de los bancos")
                 flash("No se pudieron obtener las tasas de conversión de Banesco y BANK.", "warning")
         except Exception as e:
             logging.error("Error al obtener valores USDT/VES: %s", e)

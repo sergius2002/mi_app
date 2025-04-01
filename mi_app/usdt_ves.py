@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import logging
 import warnings
+import ssl
 
 warnings.filterwarnings("ignore")
 
@@ -24,6 +25,8 @@ async def obtener_valor_usdt_por_banco(banco: str) -> float:
     Función que recibe como parámetro el banco (por ejemplo, "Banesco" o "BANK")
     y retorna el valor de USDT obtenido de la API.
     """
+    logging.info(f"Iniciando búsqueda de USDT para el banco: {banco}")
+    
     payload = {
         'proMerchantAds': False,
         'page': 1,
@@ -36,14 +39,26 @@ async def obtener_valor_usdt_por_banco(banco: str) -> float:
         'tradeType': 'SELL'
     }
 
-    async with aiohttp.ClientSession() as session:
+    # Configurar SSL context para ignorar verificación de certificados
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
+            logging.info(f"Enviando solicitud a Binance P2P para {banco}")
             async with session.post(SELL_API_URL, json=payload, headers=obtener_headers_binance()) as response:
                 if response.status == 200:
                     data = await response.json()
+                    logging.info(f"Respuesta recibida de Binance P2P para {banco}")
                     if "data" in data and data["data"]:
-                        return float(data["data"][0]["adv"]["price"])
+                        valor = float(data["data"][0]["adv"]["price"])
+                        logging.info(f"Valor encontrado para {banco}: {valor}")
+                        return valor
                     else:
+                        logging.warning(f"No se encontraron datos para {banco}, intentando sin filtro de banco")
                         # Si no se encuentran datos, se intenta sin el filtro "payTypes"
                         payload.pop("payTypes", None)
                         async with session.post(SELL_API_URL, json=payload,
@@ -51,18 +66,16 @@ async def obtener_valor_usdt_por_banco(banco: str) -> float:
                             if alt_response.status == 200:
                                 alt_data = await alt_response.json()
                                 if "data" in alt_data and alt_data["data"]:
-                                    return float(alt_data["data"][0]["adv"]["price"])
-                                else:
-                                    logging.error("No se encontraron datos en la respuesta alternativa.")
-                                    return None
-                            else:
-                                logging.error(f"Error en la solicitud alternativa: {alt_response.status}")
-                                return None
+                                    valor = float(alt_data["data"][0]["adv"]["price"])
+                                    logging.info(f"Valor encontrado sin filtro de banco: {valor}")
+                                    return valor
                 else:
-                    logging.error(f"Error en la solicitud: {response.status}, {await response.text()}")
+                    logging.error(f"Error en la respuesta de Binance P2P para {banco}. Status: {response.status}")
+                    response_text = await response.text()
+                    logging.error(f"Respuesta completa: {response_text}")
                     return None
         except Exception as e:
-            logging.error(f"Error al obtener tasas USDT/VES: {e}")
+            logging.error(f"Error al obtener valor de USDT para {banco}: {str(e)}")
             return None
 
 
