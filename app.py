@@ -18,7 +18,7 @@ time.tzset()
 import pytz
 local_tz = pytz.timezone('America/Argentina/Buenos_Aires')  # Forzar zona horaria
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app, send_file
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 
@@ -30,6 +30,7 @@ import asyncio
 import aiohttp
 import csv
 import logging
+import io
 
 # Configuración de Matplotlib
 import matplotlib
@@ -259,16 +260,16 @@ def generar_grafico():
 @grafico_bp.route("/plot.png")
 @login_required
 def plot_png():
-    from io import BytesIO
     try:
         fig = generar_grafico()
-        output = BytesIO()
-        fig.savefig(output, format='png', transparent=True)
-        output.seek(0)
-        plt.close(fig)
-        return current_app.response_class(output.getvalue(), mimetype='image/png')
+        # Convertir la figura a una imagen
+        img = io.BytesIO()
+        fig.savefig(img, format='png', bbox_inches='tight')
+        img.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
+        return send_file(img, mimetype='image/png')
     except Exception as e:
-        logging.error(f"Error al generar plot.png: {e}")
+        logging.error(f"Error al generar el gráfico: {e}")
         return "Error al generar el gráfico", 500
 
 @grafico_bp.route("/")
@@ -276,47 +277,10 @@ def plot_png():
 def index():
     try:
         actualizar_datos()
-        fig, ax = plt.subplots(figsize=(12, 6))
-        fig.patch.set_facecolor('none')  # Fondo transparente
-        ax.set_facecolor('none')  # Fondo del eje transparente
-
-        # Graficar líneas
-        ax.plot(tiempos, precios_banesco, label='Banesco', color='blue')
-        ax.plot(tiempos, precios_bank_transfer, label='Venezuela', color='orange')
-        ax.plot(tiempos, precios_mercantil, label='Mercantil', color='green')
-        ax.plot(tiempos, precios_provincial, label='Provincial', color='red')
-
-        # Añadir etiquetas de datos
-        if precios_banesco:
-            ax.annotate(f'{precios_banesco[-1]:.2f}', xy=(tiempos[-1], precios_banesco[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='blue', va='bottom', fontsize=10)
-        if precios_bank_transfer:
-            ax.annotate(f'{precios_bank_transfer[-1]:.2f}', xy=(tiempos[-1], precios_bank_transfer[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='orange', va='bottom', fontsize=10)
-        if precios_mercantil:
-            ax.annotate(f'{precios_mercantil[-1]:.2f}', xy=(tiempos[-1], precios_mercantil[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='green', va='bottom', fontsize=10)
-        if precios_provincial:
-            ax.annotate(f'{precios_provincial[-1]:.2f}', xy=(tiempos[-1], precios_provincial[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='red', va='bottom', fontsize=10)
-
-        # Configurar etiquetas y leyenda
-        ax.set_xlabel('Hora', fontsize=12)
-        ax.set_ylabel('Precio (VES)', fontsize=12)
-        ax.legend(loc='upper left', fontsize=10)
-
-        # Configurar ticks
-        if len(tiempos) > 1:
-            ax.set_xticks([tiempos[0], tiempos[-1]])
-        else:
-            ax.set_xticks(tiempos)
-        ax.tick_params(axis='x', rotation=45, labelsize=10)
-
-        plt.tight_layout()
-        return fig
+        return render_template("grafico.html", active_page="grafico")
     except Exception as e:
         logging.error(f"Error al generar el gráfico: {e}")
-        raise  # Relanzar para depuración
+        return "Error al generar el gráfico", 500
 
 # -----------------------------------------------------------------------------
 # Función para generar hash único para cada transferencia

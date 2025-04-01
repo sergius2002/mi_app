@@ -6,15 +6,19 @@ import ssl
 # Cargar variables de entorno
 load_dotenv()
 
+# Debug prints
+print("SUPABASE_URL:", os.getenv('SUPABASE_URL'))
+print("SUPABASE_KEY:", os.getenv('SUPABASE_KEY'))
+
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
-os.environ['TZ'] = os.getenv('TZ', 'America/Argentina/Buenos_Aires')
+os.environ['TZ'] = 'America/Argentina/Buenos_Aires'  # Forzar zona horaria
 time.tzset()
 
 import pytz
-local_tz = pytz.timezone(os.getenv('TZ', 'America/Argentina/Buenos_Aires'))
+local_tz = pytz.timezone('America/Argentina/Buenos_Aires')  # Forzar zona horaria
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app, send_file
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 
@@ -26,6 +30,7 @@ import asyncio
 import aiohttp
 import csv
 import logging
+import io
 
 # Configuración de Matplotlib
 import matplotlib
@@ -154,7 +159,7 @@ async def obtener_tasa_usdt_ves(bancos):
 
 def reiniciar_datos_diarios():
     global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now = datetime.now()
+    now = datetime.now(local_tz)
     if now.hour == 8 and (last_reset_date is None or last_reset_date != now.date()):
         logging.info("Reiniciando datos del gráfico y CSV a las 8:00 am...")
         tiempos.clear()
@@ -178,7 +183,9 @@ def actualizar_datos():
     precio_provincial_actualizado = loop.run_until_complete(obtener_tasa_usdt_ves(["Provincial"]))
     loop.close()
 
-    tiempo_str = datetime.now().strftime('%H:%M\n%d - %b')
+    # Usar la zona horaria local para el tiempo actual
+    tiempo_actual = datetime.now(local_tz)
+    tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
     if precio_banesco_actualizado is not None:
@@ -201,11 +208,9 @@ def actualizar_datos():
     else:
         precios_provincial.append(precios_provincial[-1] if precios_provincial else 0)
 
+    # Guardar datos con la hora local
     guardar_datos_csv(tiempo_str, precios_banesco[-1], precios_bank_transfer[-1], 
                      precios_mercantil[-1], precios_provincial[-1])
-
-    # La lógica de límite de 50 elementos ha sido eliminada
-
 
 def generar_grafico():
     try:
@@ -255,22 +260,26 @@ def generar_grafico():
 @grafico_bp.route("/plot.png")
 @login_required
 def plot_png():
-    from io import BytesIO
     try:
         fig = generar_grafico()
-        output = BytesIO()
-        fig.savefig(output, format='png', transparent=True)
-        output.seek(0)
-        plt.close(fig)
-        return current_app.response_class(output.getvalue(), mimetype='image/png')
+        # Convertir la figura a una imagen
+        img = io.BytesIO()
+        fig.savefig(img, format='png', bbox_inches='tight')
+        img.seek(0)
+        return send_file(img, mimetype='image/png')
     except Exception as e:
-        logging.error(f"Error al generar plot.png: {e}")
+        logging.error(f"Error al generar el gráfico: {e}")
         return "Error al generar el gráfico", 500
 
 @grafico_bp.route("/")
 @login_required
 def index():
-    return render_template("grafico.html", active_page="grafico")
+    try:
+        actualizar_datos()
+        return render_template("grafico.html", active_page="grafico")
+    except Exception as e:
+        logging.error(f"Error al generar el gráfico: {e}")
+        return "Error al generar el gráfico", 500
 
 # -----------------------------------------------------------------------------
 # Función para generar hash único para cada transferencia
@@ -339,7 +348,9 @@ def format_fecha_detec(value):
             # Formatear la fecha
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(value, datetime):
-            # Si ya es datetime, solo formatear
+            # Si ya es datetime, asegurarse de que tenga zona horaria
+            if value.tzinfo is None:
+                value = local_tz.localize(value)
             return value.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
         return str(value)
     except Exception as e:
@@ -385,7 +396,10 @@ app.jinja_env.filters['format_decimal'] = format_decimal
 def filter_transferencias(query):
     cliente = request.args.get("cliente")
     if cliente:
-        query = query.ilike("cliente", f"%{cliente}%")
+        if cliente == "Desconocido":
+            query = query.is_("cliente", "null")
+        else:
+            query = query.ilike("cliente", f"%{cliente}%")
     rut = request.args.get("rut")
     if rut:
         query = query.ilike("rut", f"%{rut}%")
@@ -455,7 +469,7 @@ def index():
                 # Convertir los datos a su tipo correcto y manejar valores nulos
                 transfer_processed = {
                     'id': transfer.get('id'),
-                    'cliente': transfer.get('cliente') if transfer.get('cliente') is not None else '',
+                    'cliente': transfer.get('cliente') if transfer.get('cliente') is not None else 'Desconocido',
                     'empresa': transfer.get('empresa') if transfer.get('empresa') is not None else '',
                     'rut': transfer.get('rut') if transfer.get('rut') is not None else '',
                     'monto': float(transfer.get('monto', 0)),
@@ -882,7 +896,8 @@ def ingresar_usdt():
             costo_real = amount
             commission = 0
             createtime = request.form.get("createtime")
-            dt_createtime = datetime.fromisoformat(createtime)
+            # Asegurarse de que la fecha está en la zona horaria correcta
+            dt_createtime = datetime.strptime(createtime, "%Y-%m-%dT%H:%M")
             dt_createtime = local_tz.localize(dt_createtime)
             createtime = dt_createtime.isoformat()
             hash_input = f"{totalprice}{tasa}{tradetype}{fiat}{asset}{createtime}"
@@ -907,6 +922,7 @@ def ingresar_usdt():
             logging.error("Error al ingresar compra de USDT: %s", e)
             flash("Error al ingresar la compra de USDT: " + str(e))
             return redirect(url_for("admin.ingresar_usdt"))
+    # Asegurarse de que la fecha actual está en la zona horaria correcta
     current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
     tradetype_options = ["BUY", "SELL"]
     fiat_options = ["CLP", "VES", "USD"]
@@ -1088,6 +1104,16 @@ app.register_blueprint(admin_bp, url_prefix="/admin")
 app.register_blueprint(utilidades_bp, url_prefix="/utilidades")
 app.register_blueprint(margen_bp, url_prefix="/admin")
 app.register_blueprint(grafico_bp, url_prefix="/grafico")
+
+def get_current_datetime():
+    """Helper function to get current datetime in local timezone"""
+    return datetime.now(local_tz)
+
+def format_datetime_with_timezone(dt):
+    """Helper function to format datetime with timezone"""
+    if dt.tzinfo is None:
+        dt = local_tz.localize(dt)
+    return dt.astimezone(local_tz)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
