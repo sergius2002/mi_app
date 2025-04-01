@@ -34,9 +34,40 @@
 
   <!-- Tarjeta para mostrar la tabla de datos -->
   <div class="card shadow-lg">
-
     <div class="card-body">
       {% if compras_data %}
+      <!-- Recuadro resumen -->
+      <div class="row mb-4">
+        <div class="col-md-6 mx-auto">
+          <div class="card bg-light">
+            <div class="card-body text-center">
+              <h5 class="card-title text-azul-oscuro mb-3">Resumen del día</h5>
+              <div class="row">
+                <div class="col-6">
+                  <p class="mb-1"><strong>Total Brs</strong></p>
+                  <h4 class="text-primary">
+                    {{ compras_data | sum(attribute='totalprice') | round | int | format_int }}
+                  </h4>
+                </div>
+                <div class="col-6">
+                  <p class="mb-1"><strong>Total CLP</strong></p>
+                  <h4 class="text-success">
+                    {% set total_clp = namespace(value=0) %}
+                    {% for row in compras_data %}
+                      {% if row.unitprice and row.costo_no_vendido and row.costo_no_vendido != 0 %}
+                        {% set clp_value = row.totalprice / (row.unitprice / row.costo_no_vendido) %}
+                        {% set total_clp.value = total_clp.value + clp_value %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ total_clp.value | round | int | format_int }}
+                  </h4>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="table-responsive">
         <table class="table table-hover table-bordered text-center mb-0">
           <thead class="thead-light">
@@ -44,6 +75,7 @@
               <th>Banco</th>
               <th>Tasa Compra</th>
               <th>Brs</th>
+              <th>CLP</th>
               <th>Hora</th>
             </tr>
           </thead>
@@ -51,8 +83,9 @@
             {% for row in compras_data %}
             <tr>
               <td>{{ row.paymethodname }}</td>
-              <td>{{ row.tasa | format_decimal(6) }}</td> <!-- Muestra la tasa calculada -->
+              <td>{{ (row.unitprice / row.costo_no_vendido) | format_decimal(6) if row.costo_no_vendido and row.costo_no_vendido != 0 else 0 }}</td>
               <td>{{ row.totalprice | format_int }}</td>
+              <td>{{ ((row.totalprice / (row.unitprice / row.costo_no_vendido)) | round | int | format_int) if row.costo_no_vendido and row.costo_no_vendido != 0 else 0 }}</td>
               <td>{{ row.createtime | format_time }}</td>
             </tr>
             {% endfor %}
