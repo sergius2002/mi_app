@@ -12,11 +12,11 @@ print("SUPABASE_KEY:", os.getenv('SUPABASE_KEY'))
 
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
-os.environ['TZ'] = os.getenv('TZ', 'America/Argentina/Buenos_Aires')
+os.environ['TZ'] = os.getenv('TZ', 'America/Santiago')
 time.tzset()
 
 import pytz
-local_tz = pytz.timezone(os.getenv('TZ', 'America/Argentina/Buenos_Aires'))
+local_tz = pytz.timezone(os.getenv('TZ', 'America/Santiago'))
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app
 from supabase import create_client, Client
@@ -158,7 +158,7 @@ async def obtener_tasa_usdt_ves(bancos):
 
 def reiniciar_datos_diarios():
     global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now = datetime.now()
+    now = datetime.now(local_tz)
     if now.hour == 8 and (last_reset_date is None or last_reset_date != now.date()):
         logging.info("Reiniciando datos del gráfico y CSV a las 8:00 am...")
         tiempos.clear()
@@ -182,7 +182,9 @@ def actualizar_datos():
     precio_provincial_actualizado = loop.run_until_complete(obtener_tasa_usdt_ves(["Provincial"]))
     loop.close()
 
-    tiempo_str = datetime.now().strftime('%H:%M\n%d - %b')
+    # Usar la zona horaria local para el tiempo actual
+    tiempo_actual = datetime.now(local_tz)
+    tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
     if precio_banesco_actualizado is not None:
@@ -274,7 +276,49 @@ def plot_png():
 @grafico_bp.route("/")
 @login_required
 def index():
-    return render_template("grafico.html", active_page="grafico")
+    try:
+        actualizar_datos()
+        fig, ax = plt.subplots(figsize=(12, 6))
+        fig.patch.set_facecolor('none')  # Fondo transparente
+        ax.set_facecolor('none')  # Fondo del eje transparente
+
+        # Graficar líneas
+        ax.plot(tiempos, precios_banesco, label='Banesco', color='blue')
+        ax.plot(tiempos, precios_bank_transfer, label='Venezuela', color='orange')
+        ax.plot(tiempos, precios_mercantil, label='Mercantil', color='green')
+        ax.plot(tiempos, precios_provincial, label='Provincial', color='red')
+
+        # Añadir etiquetas de datos
+        if precios_banesco:
+            ax.annotate(f'{precios_banesco[-1]:.2f}', xy=(tiempos[-1], precios_banesco[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='blue', va='bottom', fontsize=10)
+        if precios_bank_transfer:
+            ax.annotate(f'{precios_bank_transfer[-1]:.2f}', xy=(tiempos[-1], precios_bank_transfer[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='orange', va='bottom', fontsize=10)
+        if precios_mercantil:
+            ax.annotate(f'{precios_mercantil[-1]:.2f}', xy=(tiempos[-1], precios_mercantil[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='green', va='bottom', fontsize=10)
+        if precios_provincial:
+            ax.annotate(f'{precios_provincial[-1]:.2f}', xy=(tiempos[-1], precios_provincial[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='red', va='bottom', fontsize=10)
+
+        # Configurar etiquetas y leyenda
+        ax.set_xlabel('Hora', fontsize=12)
+        ax.set_ylabel('Precio (VES)', fontsize=12)
+        ax.legend(loc='upper left', fontsize=10)
+
+        # Configurar ticks
+        if len(tiempos) > 1:
+            ax.set_xticks([tiempos[0], tiempos[-1]])
+        else:
+            ax.set_xticks(tiempos)
+        ax.tick_params(axis='x', rotation=45, labelsize=10)
+
+        plt.tight_layout()
+        return fig
+    except Exception as e:
+        logging.error(f"Error al generar el gráfico: {e}")
+        raise  # Relanzar para depuración
 
 # -----------------------------------------------------------------------------
 # Función para generar hash único para cada transferencia
@@ -889,7 +933,8 @@ def ingresar_usdt():
             costo_real = amount
             commission = 0
             createtime = request.form.get("createtime")
-            dt_createtime = datetime.fromisoformat(createtime)
+            # Asegurarse de que la fecha está en la zona horaria correcta
+            dt_createtime = datetime.strptime(createtime, "%Y-%m-%dT%H:%M")
             dt_createtime = local_tz.localize(dt_createtime)
             createtime = dt_createtime.isoformat()
             hash_input = f"{totalprice}{tasa}{tradetype}{fiat}{asset}{createtime}"
@@ -914,6 +959,7 @@ def ingresar_usdt():
             logging.error("Error al ingresar compra de USDT: %s", e)
             flash("Error al ingresar la compra de USDT: " + str(e))
             return redirect(url_for("admin.ingresar_usdt"))
+    # Asegurarse de que la fecha actual está en la zona horaria correcta
     current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
     tradetype_options = ["BUY", "SELL"]
     fiat_options = ["CLP", "VES", "USD"]
