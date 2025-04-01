@@ -859,24 +859,6 @@ def tasa_compras():
     return render_template("tasa_compras.html", active_page="admin",
                            compras_data=compras_data, fecha=fecha)
 
-@admin_bp.route("/calcular_tasa", methods=["GET"])
-@login_required
-@user_allowed
-def calcular_tasa():
-    selected_date = request.args.get("fecha")
-    if not selected_date:
-        selected_date = datetime.now(local_tz).strftime("%Y-%m-%d")
-    try:
-        rpc_response = supabase.rpc("get_tasa_ponderada_por_dia", {"p_fecha": selected_date}).execute()
-        tasa_ponderada = rpc_response.data if rpc_response.data is not None else 0
-    except Exception as e:
-        logging.error("Error al calcular tasa ponderada por día: %s", e)
-        tasa_ponderada = "Error"
-    return render_template("admin/calcular_tasa.html",
-                           active_page="admin",
-                           tasa_ponderada=tasa_ponderada,
-                           selected_date=selected_date)
-
 @admin_bp.route("/ingresar_usdt", methods=["GET", "POST"])
 @login_required
 @user_allowed
