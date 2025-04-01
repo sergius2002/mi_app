@@ -41,4 +41,8 @@ data_tasas.csv
 Thumbs.db
 
 # Environment variables
-margen 
+margen
+
+# Entornos virtuales
+mi_app_bot/
+mi_app_web/ 
