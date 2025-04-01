@@ -11,12 +11,8 @@ python-dotenv==1.0.0
 pandas==2.1.4
 numpy==1.24.4
 requests
-Werkzeug
-click
-itsdangerous
-plotly
+python-telegram-bot==22.0
 pillow
-python-telegram-bot
 matplotlib==3.8.2
 python-binance==1.0.19
 pycryptodome==3.19.1
