@@ -12,11 +12,11 @@ print("SUPABASE_KEY:", os.getenv('SUPABASE_KEY'))
 
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
-os.environ['TZ'] = 'America/Santiago'
+os.environ['TZ'] = 'America/Argentina/Buenos_Aires'  # Forzar zona horaria
 time.tzset()
 
 import pytz
-local_tz = pytz.timezone('America/Santiago')
+local_tz = pytz.timezone('America/Argentina/Buenos_Aires')  # Forzar zona horaria
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app
 from supabase import create_client, Client
@@ -385,7 +385,9 @@ def format_fecha_detec(value):
             # Formatear la fecha
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(value, datetime):
-            # Si ya es datetime, solo formatear
+            # Si ya es datetime, asegurarse de que tenga zona horaria
+            if value.tzinfo is None:
+                value = local_tz.localize(value)
             return value.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
         return str(value)
     except Exception as e:
@@ -1139,6 +1141,16 @@ app.register_blueprint(admin_bp, url_prefix="/admin")
 app.register_blueprint(utilidades_bp, url_prefix="/utilidades")
 app.register_blueprint(margen_bp, url_prefix="/admin")
 app.register_blueprint(grafico_bp, url_prefix="/grafico")
+
+def get_current_datetime():
+    """Helper function to get current datetime in local timezone"""
+    return datetime.now(local_tz)
+
+def format_datetime_with_timezone(dt):
+    """Helper function to format datetime with timezone"""
+    if dt.tzinfo is None:
+        dt = local_tz.localize(dt)
+    return dt.astimezone(local_tz)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
