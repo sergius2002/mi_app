@@ -2,6 +2,7 @@ import os
 import time
 from dotenv import load_dotenv
 import ssl
+import shutil
 
 # Cargar variables de entorno
 load_dotenv()
@@ -98,7 +99,7 @@ grafico_bp = Blueprint("grafico", __name__, template_folder="templates")
 SELL_API_URL = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 DATA_FILE = "data_tasas.csv"  # Archivo para almacenar el historial de datos
 
-# Variables globales para almacenar datos del gráfico
+# Variables globales para el gráfico
 tiempos = []
 precios_banesco = []
 precios_bank_transfer = []
@@ -106,15 +107,69 @@ precios_mercantil = []
 precios_provincial = []
 last_reset_date = None
 
-# Inicializar o reiniciar el archivo CSV con encabezados
-with open(DATA_FILE, mode="w", newline="") as file:
-    writer = csv.writer(file)
-    writer.writerow(["Tiempo", "Precio_Banesco", "Precio_Bank_Transfer", "Precio_Mercantil", "Precio_Provincial"])
+def cargar_datos_historicos():
+    global tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
+    try:
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, mode="r", newline="") as file:
+                reader = csv.reader(file)
+                next(reader)  # Saltar encabezados
+                for row in reader:
+                    if len(row) >= 5:  # Asegurarse de que la fila tiene todos los datos
+                        tiempo, banesco, bank, mercantil, provincial = row
+                        tiempos.append(tiempo)
+                        precios_banesco.append(float(banesco) if banesco else 0)
+                        precios_bank_transfer.append(float(bank) if bank else 0)
+                        precios_mercantil.append(float(mercantil) if mercantil else 0)
+                        precios_provincial.append(float(provincial) if provincial else 0)
+            logging.info(f"Datos históricos cargados: {len(tiempos)} registros")
+    except Exception as e:
+        logging.error(f"Error al cargar datos históricos: {e}")
 
-def guardar_datos_csv(tiempo, precio_banesco, precio_bank_transfer, precio_mercantil, precio_provincial):
-    with open(DATA_FILE, mode="a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([tiempo, precio_banesco, precio_bank_transfer, precio_mercantil, precio_provincial])
+def reiniciar_datos_diarios():
+    global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
+    now = datetime.now(local_tz)
+    
+    # Solo reiniciar si:
+    # 1. Es la primera vez (last_reset_date es None)
+    # 2. Es un nuevo día y son las 8:00 am
+    if last_reset_date is None or (now.hour == 8 and now.date() > last_reset_date):
+        logging.info(f"Reiniciando datos del gráfico y CSV a las {now.strftime('%Y-%m-%d %H:%M:%S')}...")
+        
+        # Guardar una copia de respaldo antes de reiniciar
+        if os.path.exists(DATA_FILE):
+            backup_file = f"{DATA_FILE}.{now.strftime('%Y%m%d')}.bak"
+            try:
+                shutil.copy2(DATA_FILE, backup_file)
+                logging.info(f"Backup creado: {backup_file}")
+            except Exception as e:
+                logging.error(f"Error al crear backup: {e}")
+        
+        # Reiniciar las listas
+        tiempos.clear()
+        precios_banesco.clear()
+        precios_bank_transfer.clear()
+        precios_mercantil.clear()
+        precios_provincial.clear()
+        
+        # Crear nuevo archivo CSV
+        with open(DATA_FILE, mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Tiempo", "Precio_Banesco", "Precio_Bank_Transfer", "Precio_Mercantil", "Precio_Provincial"])
+        
+        last_reset_date = now.date()
+        logging.info("Reinicio completado")
+
+def guardar_datos_csv(tiempo, banesco, bank, mercantil, provincial):
+    try:
+        with open(DATA_FILE, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow([tiempo, banesco, bank, mercantil, provincial])
+    except Exception as e:
+        logging.error(f"Error al guardar datos en CSV: {e}")
+
+# Cargar datos históricos al inicio
+cargar_datos_historicos()
 
 async def obtener_tasa_usdt_ves(bancos):
     headers = {
@@ -156,21 +211,6 @@ async def obtener_tasa_usdt_ves(bancos):
         except Exception as e:
             logging.error(f"Error al obtener tasa USDT/VES: {e}")
             return None
-
-def reiniciar_datos_diarios():
-    global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now = datetime.now(local_tz)
-    if now.hour == 8 and (last_reset_date is None or last_reset_date != now.date()):
-        logging.info("Reiniciando datos del gráfico y CSV a las 8:00 am...")
-        tiempos.clear()
-        precios_banesco.clear()
-        precios_bank_transfer.clear()
-        precios_mercantil.clear()
-        precios_provincial.clear()
-        with open(DATA_FILE, mode="w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow(["Tiempo", "Precio_Banesco", "Precio_Bank_Transfer", "Precio_Mercantil", "Precio_Provincial"])
-        last_reset_date = now.date()
 
 def actualizar_datos():
     global tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
