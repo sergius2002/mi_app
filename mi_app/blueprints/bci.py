@@ -31,12 +31,19 @@ def bci_required(f):
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
+        logging.info("Iniciando proceso de autorización BCI")
+        
         # Verificar que las variables de entorno necesarias estén configuradas
         required_vars = ["BCI_CLIENT_ID", "BCI_CLIENT_SECRET", "BCI_REDIRECT_URI", "BCI_API_BASE_URL"]
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
             logging.error(f"Variables de entorno faltantes: {', '.join(missing_vars)}")
             return jsonify({"error": f"Faltan variables de entorno: {', '.join(missing_vars)}"}), 500
+
+        logging.info("Variables de entorno verificadas correctamente")
+        logging.info(f"BCI_API_BASE_URL: {os.getenv('BCI_API_BASE_URL')}")
+        logging.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
+        logging.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
 
         # Crear el objeto request
         request_obj = {
@@ -50,11 +57,15 @@ def auth():
             }
         }
 
+        logging.info(f"Objeto request creado: {request_obj}")
+
         # Convertir a JSON sin espacios y con codificación UTF-8
         request_json = json.dumps(request_obj, separators=(',', ':'))
+        logging.info(f"JSON generado: {request_json}")
         
         # Codificar para URL
         request_encoded = quote(request_json)
+        logging.info(f"JSON codificado: {request_encoded}")
         
         # Construir la URL de autorización
         auth_url = (
