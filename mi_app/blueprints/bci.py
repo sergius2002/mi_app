@@ -27,7 +27,7 @@ def bci_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-@bci_bp.route('/auth')
+@bci_bp.route("/auth")
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
