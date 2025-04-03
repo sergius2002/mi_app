@@ -33,7 +33,8 @@ class BCIClient:
                 "aud": f"{self.api_base_url}/v1/api-oauth/token",
                 "iat": current_time,
                 "exp": current_time + 300,  # 5 minutos de validez
-                "jti": str(uuid.uuid4())
+                "jti": str(uuid.uuid4()),
+                "scope": "customers accounts transactions payments"
             }
 
             # Generar el JWT
@@ -44,11 +45,13 @@ class BCIClient:
                 headers={
                     "typ": "JWT",
                     "alg": "HS256",
-                    "kid": self.client_id
+                    "kid": self.client_id,
+                    "x5t": self.client_id
                 }
             )
 
             self.logger.info("JWT generado correctamente")
+            self.logger.info(f"Payload del JWT: {json.dumps(payload)}")
             return token
         except Exception as e:
             self.logger.error(f"Error al generar JWT: {str(e)}", exc_info=True)
@@ -77,7 +80,8 @@ class BCIClient:
                 f"{self.api_base_url}/v1/api-oauth/token",
                 data=data,
                 headers={
-                    "Content-Type": "application/x-www-form-urlencoded"
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json"
                 }
             )
 
@@ -105,7 +109,8 @@ class BCIClient:
                 f"{self.api_base_url}/v1/accounts",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
                 }
             )
             return response.json()
