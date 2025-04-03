@@ -7,7 +7,7 @@ from functools import wraps
 import json
 from datetime import datetime, timedelta
 import uuid
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 # Configurar logging
 logging.basicConfig(
@@ -90,6 +90,18 @@ def auth():
         # Asegurarse de que la URL esté correctamente codificada
         auth_url = auth_url.replace(' ', '+')
         logger.info(f"URL de autorización final: {auth_url}")
+            
+        # Verificar que la URL es válida
+        try:
+            parsed_url = urlparse(auth_url)
+            if not parsed_url.scheme or not parsed_url.netloc:
+                error_msg = "URL de autorización inválida"
+                logger.error(error_msg)
+                return jsonify({'error': error_msg}), 500
+        except Exception as e:
+            error_msg = f"Error al validar la URL: {str(e)}"
+            logger.error(error_msg)
+            return jsonify({'error': error_msg}), 500
             
         return redirect(auth_url)
         
