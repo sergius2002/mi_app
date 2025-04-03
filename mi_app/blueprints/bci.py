@@ -41,22 +41,30 @@ def auth():
             "nonce": "bci_nonce"
         }
         
-        # Parámetros requeridos para la autorización
-        auth_params = {
+        # Convertir el objeto request a JSON
+        request_json = json.dumps(request_obj, separators=(',', ':'), ensure_ascii=False)
+        
+        # Parámetros base para la autorización
+        base_params = {
             "response_type": "code",
             "client_id": os.getenv('BCI_CLIENT_ID'),
             "redirect_uri": os.getenv('BCI_REDIRECT_URI'),
             "scope": "customers accounts transactions payments",
             "state": "bci_auth",
-            "nonce": "bci_nonce",
-            "request": json.dumps(request_obj, separators=(',', ':'), ensure_ascii=False)
+            "nonce": "bci_nonce"
         }
         
-        # Logging de los parámetros (sin información sensible)
-        logging.info(f"Parámetros de autorización: {auth_params}")
+        # Construir la URL base
+        base_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/authorize"
         
-        # Construir URL de autorización
-        auth_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/authorize?{urllib.parse.urlencode(auth_params, quote_via=urllib.parse.quote)}"
+        # Codificar los parámetros base
+        encoded_params = urllib.parse.urlencode(base_params, quote_via=urllib.parse.quote)
+        
+        # Agregar el parámetro request
+        auth_url = f"{base_url}?{encoded_params}&request={urllib.parse.quote(request_json)}"
+        
+        # Logging para depuración
+        logging.info(f"Request JSON: {request_json}")
         logging.info(f"URL de autorización: {auth_url}")
         
         return redirect(auth_url)
