@@ -46,11 +46,7 @@ plt.ioff()
 
 from blueprints.utilidades import utilidades_bp
 from blueprints.margen import margen_bp
-from mi_app.blueprints.bci import bci_bp
-from mi_app.blueprints.transferencias import transferencias_bp
-from mi_app.blueprints.pedidos import pedidos_bp
-from mi_app.blueprints.admin import admin_bp
-from mi_app.blueprints.dashboard import dashboard_bp
+from blueprints.bci import bci_bp
 
 # -----------------------------------------------------------------------------
 # Configuración de logging
@@ -73,11 +69,7 @@ cache = Cache(app, config={
 # -----------------------------------------------------------------------------
 app.register_blueprint(utilidades_bp)
 app.register_blueprint(margen_bp)
-app.register_blueprint(bci_bp, url_prefix='/bci')
-app.register_blueprint(transferencias_bp, url_prefix='/transferencias')
-app.register_blueprint(pedidos_bp, url_prefix='/pedidos')
-app.register_blueprint(admin_bp, url_prefix='/admin')
-app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
+app.register_blueprint(bci_bp)
 
 # -----------------------------------------------------------------------------
 # Decorador login_required
@@ -206,690 +198,1159 @@ async def obtener_tasa_usdt_ves(bancos):
         'publisherType': 'merchant',
         'asset': 'USDT',
         'fiat': 'VES',
+        'tradeType': 'SELL'
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(SELL_API_URL, json=payload, headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data
-            else:
-                logging.error(f"Error al obtener tasas: {response.status}")
-                return None
+    
+    # Configurar SSL context para ignorar verificación de certificados
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    
+    async with aiohttp.ClientSession(connector=connector) as session:
+        try:
+            async with session.post(SELL_API_URL, json=payload, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "data" in data and data["data"]:
+                        return float(data["data"][0]["adv"]["price"])
+                    else:
+                        logging.warning("No se encontraron datos en la respuesta.")
+                        return None
+                else:
+                    logging.error(f"Error en la solicitud: {response.status}")
+                    return None
+        except Exception as e:
+            logging.error(f"Error al obtener tasa USDT/VES: {e}")
+            return None
 
 def actualizar_datos():
     global tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    
-    # Reiniciar datos diarios si es necesario
-    reiniciar_datos_diarios()
-    
-    # Obtener la hora actual en la zona horaria local
-    now = datetime.now(local_tz)
-    tiempo_actual = now.strftime("%H:%M:%S")
-    
-    # Obtener tasas para cada banco
-    bancos = ["Banesco", "Bank Transfer", "Mercantil", "Provincial"]
-    tasas = asyncio.run(obtener_tasa_usdt_ves(bancos))
-    
-    if tasas:
-        # Procesar datos para cada banco
-        for banco in bancos:
-            if banco == "Banesco":
-                precios_banesco.append(tasas.get("Banesco", 0))
-            elif banco == "Bank Transfer":
-                precios_bank_transfer.append(tasas.get("Bank Transfer", 0))
-            elif banco == "Mercantil":
-                precios_mercantil.append(tasas.get("Mercantil", 0))
-            elif banco == "Provincial":
-                precios_provincial.append(tasas.get("Provincial", 0))
-        
-        # Añadir el tiempo actual
-        tiempos.append(tiempo_actual)
-        
-        # Guardar en CSV
-        guardar_datos_csv(
-            tiempo_actual,
-            precios_banesco[-1],
-            precios_bank_transfer[-1],
-            precios_mercantil[-1],
-            precios_provincial[-1]
-        )
-        
-        # Limitar el número de puntos en el gráfico
-        max_points = 100
-        if len(tiempos) > max_points:
-            tiempos = tiempos[-max_points:]
-            precios_banesco = precios_banesco[-max_points:]
-            precios_bank_transfer = precios_bank_transfer[-max_points:]
-            precios_mercantil = precios_mercantil[-max_points:]
-            precios_provincial = precios_provincial[-max_points:]
-        
-        logging.info("Datos actualizados correctamente")
+    reiniciar_datos_diarios()  # Esto asegura el reinicio a las 8:00 am
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    precio_banesco_actualizado = loop.run_until_complete(obtener_tasa_usdt_ves(["Banesco"]))
+    precio_bank_transfer_actualizado = loop.run_until_complete(obtener_tasa_usdt_ves(["BANK"]))
+    precio_mercantil_actualizado = loop.run_until_complete(obtener_tasa_usdt_ves(["Mercantil"]))
+    precio_provincial_actualizado = loop.run_until_complete(obtener_tasa_usdt_ves(["Provincial"]))
+    loop.close()
+
+    # Usar la zona horaria local para el tiempo actual
+    tiempo_actual = datetime.now(local_tz)
+    tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
+    tiempos.append(tiempo_str)
+
+    if precio_banesco_actualizado is not None:
+        precios_banesco.append(precio_banesco_actualizado)
     else:
-        logging.error("No se pudieron obtener las tasas")
+        precios_banesco.append(precios_banesco[-1] if precios_banesco else 0)
+
+    if precio_bank_transfer_actualizado is not None:
+        precios_bank_transfer.append(precio_bank_transfer_actualizado)
+    else:
+        precios_bank_transfer.append(precios_bank_transfer[-1] if precios_bank_transfer else 0)
+
+    if precio_mercantil_actualizado is not None:
+        precios_mercantil.append(precio_mercantil_actualizado)
+    else:
+        precios_mercantil.append(precios_mercantil[-1] if precios_mercantil else 0)
+
+    if precio_provincial_actualizado is not None:
+        precios_provincial.append(precio_provincial_actualizado)
+    else:
+        precios_provincial.append(precios_provincial[-1] if precios_provincial else 0)
+
+    # Guardar datos con la hora local
+    guardar_datos_csv(tiempo_str, precios_banesco[-1], precios_bank_transfer[-1], 
+                     precios_mercantil[-1], precios_provincial[-1])
 
 def generar_grafico():
-    plt.figure(figsize=(10, 6))
-    
-    # Asegurarse de que todos los arrays tengan la misma longitud
-    min_len = min(len(tiempos), len(precios_banesco), len(precios_bank_transfer), len(precios_mercantil), len(precios_provincial))
-    tiempos_plot = tiempos[-min_len:]
-    precios_banesco_plot = precios_banesco[-min_len:]
-    precios_bank_transfer_plot = precios_bank_transfer[-min_len:]
-    precios_mercantil_plot = precios_mercantil[-min_len:]
-    precios_provincial_plot = precios_provincial[-min_len:]
-    
-    # Graficar cada banco con un color diferente
-    plt.plot(tiempos_plot, precios_banesco_plot, label='Banesco', color='blue')
-    plt.plot(tiempos_plot, precios_bank_transfer_plot, label='Bank Transfer', color='green')
-    plt.plot(tiempos_plot, precios_mercantil_plot, label='Mercantil', color='red')
-    plt.plot(tiempos_plot, precios_provincial_plot, label='Provincial', color='purple')
-    
-    # Configurar el gráfico
-    plt.title('Tasas de USDT a VES en tiempo real')
-    plt.xlabel('Hora')
-    plt.ylabel('Precio (VES)')
-    plt.legend()
-    plt.grid(True)
-    
-    # Rotar las etiquetas del eje x para mejor legibilidad
-    plt.xticks(rotation=45)
-    
-    # Ajustar el layout para evitar que las etiquetas se corten
-    plt.tight_layout()
-    
-    # Guardar el gráfico en un buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close()
-    
-    return buf
+    try:
+        actualizar_datos()
+        fig, ax = plt.subplots(figsize=(12, 6))
+        fig.patch.set_facecolor('none')  # Fondo transparente
+        ax.set_facecolor('none')  # Fondo del eje transparente
+
+        # Graficar líneas
+        ax.plot(tiempos, precios_banesco, label='Banesco', color='blue')
+        ax.plot(tiempos, precios_bank_transfer, label='Venezuela', color='orange')
+        ax.plot(tiempos, precios_mercantil, label='Mercantil', color='green')
+        ax.plot(tiempos, precios_provincial, label='Provincial', color='red')
+
+        # Añadir etiquetas de datos
+        if precios_banesco:
+            ax.annotate(f'{precios_banesco[-1]:.2f}', xy=(tiempos[-1], precios_banesco[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='blue', va='bottom', fontsize=10)
+        if precios_bank_transfer:
+            ax.annotate(f'{precios_bank_transfer[-1]:.2f}', xy=(tiempos[-1], precios_bank_transfer[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='orange', va='bottom', fontsize=10)
+        if precios_mercantil:
+            ax.annotate(f'{precios_mercantil[-1]:.2f}', xy=(tiempos[-1], precios_mercantil[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='green', va='bottom', fontsize=10)
+        if precios_provincial:
+            ax.annotate(f'{precios_provincial[-1]:.2f}', xy=(tiempos[-1], precios_provincial[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='red', va='bottom', fontsize=10)
+
+        # Configurar etiquetas y leyenda
+        ax.set_xlabel('Hora', fontsize=12)
+        ax.set_ylabel('Precio (VES)', fontsize=12)
+        ax.legend(loc='upper left', fontsize=10)
+
+        # Configurar ticks
+        if len(tiempos) > 1:
+            ax.set_xticks([tiempos[0], tiempos[-1]])
+        else:
+            ax.set_xticks(tiempos)
+        ax.tick_params(axis='x', rotation=45, labelsize=10)
+
+        plt.tight_layout()
+        return fig
+    except Exception as e:
+        logging.error(f"Error al generar el gráfico: {e}")
+        raise  # Relanzar para depuración
 
 @grafico_bp.route("/plot.png")
 @login_required
 def plot_png():
-    actualizar_datos()
-    buf = generar_grafico()
-    return send_file(buf, mimetype='image/png')
+    try:
+        fig = generar_grafico()
+        # Convertir la figura a una imagen
+        img = io.BytesIO()
+        fig.savefig(img, format='png', bbox_inches='tight')
+        img.seek(0)
+        return send_file(img, mimetype='image/png')
+    except Exception as e:
+        logging.error(f"Error al generar el gráfico: {e}")
+        return "Error al generar el gráfico", 500
 
 @grafico_bp.route("/")
 @login_required
 def index():
-    return render_template("grafico.html")
+    try:
+        actualizar_datos()
+        return render_template("grafico.html", active_page="grafico")
+    except Exception as e:
+        logging.error(f"Error al generar el gráfico: {e}")
+        return "Error al generar el gráfico", 500
 
+# -----------------------------------------------------------------------------
+# Función para generar hash único para cada transferencia
+# -----------------------------------------------------------------------------
 def generar_hash_transferencia(transferencia):
-    """Genera un hash único para una transferencia basado en sus atributos"""
-    hash_data = f"{transferencia['cliente']}{transferencia['empresa']}{transferencia['rut']}{transferencia['monto']}{transferencia['fecha']}"
-    return hashlib.md5(hash_data.encode()).hexdigest()
+    data = f"{transferencia.get('id')}-{transferencia.get('fecha')}-{transferencia.get('monto')}"
+    return hashlib.sha256(data.encode('utf-8')).hexdigest()
 
+# -----------------------------------------------------------------------------
+# Decorador para módulos restringidos
+# -----------------------------------------------------------------------------
 def user_allowed(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if "email" not in session:
-            flash("Por favor, inicia sesión.")
+        email = session.get("email")
+        if not email:
+            flash("Debes iniciar sesión.")
             return redirect(url_for("login"))
-            
         try:
-            response = supabase.table("allowed_users").select("email").eq("email", session["email"]).execute()
+            response = supabase.table("allowed_users").select("email").eq("email", email).execute()
             if not response.data:
-                flash("No tienes permiso para acceder a esta sección.")
+                flash("No tienes permisos para acceder a este módulo.")
                 return redirect(url_for("index"))
         except Exception as e:
-            logging.error("Error al verificar permisos de usuario: %s", e)
-            flash("Error al verificar permisos.")
+            logging.error("Error al verificar usuario permitido: %s", e)
+            flash("Error interno al verificar permisos.")
             return redirect(url_for("index"))
-            
         return f(*args, **kwargs)
     return wrapper
 
+# -----------------------------------------------------------------------------
+# Filtros personalizados para Jinja2
+# -----------------------------------------------------------------------------
 def format_monto(value):
-    """Formatea un monto como moneda"""
-    if value is None:
-        return "0"
-    return f"{value:,.0f}"
+    try:
+        return "{:,.0f}".format(value).replace(",", ".")
+    except Exception:
+        return value
 
 def format_date(value):
-    """Formatea una fecha como dd/mm/yyyy"""
-    if value is None:
-        return ""
-    return value.strftime("%d/%m/%Y")
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d")
+        return dt.strftime("%d-%m")
+    except Exception:
+        return value
 
 def format_time(value):
-    """Formatea una hora como HH:MM"""
-    if value is None:
-        return ""
-    return value.strftime("%H:%M")
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt.strftime("%H:%M:%S")
+    except Exception:
+        return value
+
+app.jinja_env.filters['format_time'] = format_time
 
 @app.template_filter("format_fecha_detec")
 def format_fecha_detec(value):
-    """Formatea una fecha de detección como dd/mm/yyyy HH:MM"""
-    if value is None:
+    if not value:
         return ""
-    return value.strftime("%d/%m/%Y %H:%M")
+    try:
+        if isinstance(value, str):
+            # Si es una cadena ISO, convertirla a datetime
+            dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            # Convertir a zona horaria local
+            dt = dt.astimezone(local_tz)
+            # Formatear la fecha
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(value, datetime):
+            # Si ya es datetime, asegurarse de que tenga zona horaria
+            if value.tzinfo is None:
+                value = local_tz.localize(value)
+            return value.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
+        return str(value)
+    except Exception as e:
+        logging.error(f"Error formateando fecha_detec: {e}, valor: {value}")
+        return str(value)
 
 def format_clp(value):
-    """Formatea un monto en CLP"""
-    if value is None:
-        return "0"
-    return f"${value:,.0f}"
+    try:
+        number = int(abs(float(value)))
+        return "{:,.0f}".format(number).replace(",", ".")
+    except Exception:
+        return value
 
 def format_int(value):
-    """Formatea un número como entero"""
-    if value is None:
-        return "0"
-    return f"{value:,.0f}"
+    try:
+        return "{:,.0f}".format(int(float(value))).replace(",", ".")
+    except Exception:
+        return value
 
 def format_datetime(value):
-    """Formatea una fecha y hora como dd/mm/yyyy HH:MM"""
-    if value is None:
-        return ""
-    return value.strftime("%d/%m/%Y %H:%M")
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt.strftime("%d-%m-%Y %H:%M:%S")
+    except Exception:
+        return value
 
 def format_decimal(value, decimals=3):
-    """Formatea un número decimal con la cantidad especificada de decimales"""
-    if value is None:
-        return "0"
-    return f"{value:,.{decimals}f}"
+    try:
+        return f"{float(value):.{decimals}f}"
+    except Exception:
+        return value
 
+app.jinja_env.filters['format_monto'] = format_monto
+app.jinja_env.filters['format_date'] = format_date
+app.jinja_env.filters['format_clp'] = format_clp
+app.jinja_env.filters['format_int'] = format_int
+app.jinja_env.filters['format_datetime'] = format_datetime
+app.jinja_env.filters['format_decimal'] = format_decimal
+
+# -----------------------------------------------------------------------------
+# Funciones helper para filtrar y ordenar consultas
+# -----------------------------------------------------------------------------
 def filter_transferencias(query):
-    """Aplica filtros a la consulta de transferencias"""
-    # Filtro por cliente
-    if "cliente" in request.args and request.args["cliente"]:
-        query = query.eq("cliente", request.args["cliente"])
-    
-    # Filtro por empresa
-    if "empresa" in request.args and request.args["empresa"]:
-        empresas = request.args.getlist("empresa")
-        if "Todas" not in empresas:
-            query = query.in_("empresa", empresas)
-    
-    # Filtro por rut
-    if "rut" in request.args and request.args["rut"]:
-        query = query.eq("rut", request.args["rut"])
-    
-    # Filtro por monto
-    if "monto" in request.args and request.args["monto"]:
-        query = query.eq("monto", request.args["monto"])
-    
-    # Filtro por estado de verificación
-    if "verificada" in request.args and request.args["verificada"] != "":
-        query = query.eq("verificada", request.args["verificada"] == "true")
-    
+    cliente = request.args.get("cliente")
+    if cliente:
+        if cliente == "Desconocido":
+            query = query.is_("cliente", "null")
+        else:
+            query = query.ilike("cliente", f"%{cliente}%")
+    rut = request.args.get("rut")
+    if rut:
+        query = query.ilike("rut", f"%{rut}%")
+    monto = request.args.get("monto", "").replace(".", "").strip()
+    if monto:
+        try:
+            query = query.eq("monto", int(monto))
+        except ValueError:
+            logging.warning("Valor de monto no válido: %s", monto)
+    verificada = request.args.get("verificada")
+    if verificada == "true":
+        query = query.eq("verificada", True)
+    elif verificada == "false":
+        query = query.eq("verificada", False)
+    empresas = request.args.getlist("empresa")
+    if empresas:
+        query = query.in_("empresa", empresas)
     return query
 
 def filter_pedidos(query):
-    """Aplica filtros a la consulta de pedidos"""
-    # Filtro por cliente
-    if "cliente" in request.args and request.args["cliente"]:
-        query = query.eq("cliente", request.args["cliente"])
-    
-    # Filtro por estado
-    if "estado" in request.args and request.args["estado"]:
-        query = query.eq("estado", request.args["estado"])
-    
+    cliente = request.args.get("cliente")
+    if cliente:
+        query = query.ilike("cliente", f"%{cliente}%")
+    fecha = request.args.get("fecha")
+    if not fecha:
+        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+    query = query.eq("fecha", fecha)
+    brs = request.args.get("brs", "").strip()
+    if brs:
+        try:
+            query = query.eq("brs", float(brs))
+        except ValueError:
+            logging.warning("Valor de BRS no válido: %s", brs)
+    clp = request.args.get("clp", "").replace(".", "").strip()
+    if clp:
+        try:
+            query = query.eq("clp", int(clp))
+        except ValueError:
+            logging.warning("Valor de CLP no válido: %s", clp)
     return query
 
 def apply_ordering(query, sort_params):
-    """Aplica ordenamiento a la consulta"""
-    for sort_param in sort_params:
-        if sort_param in request.args and request.args[sort_param]:
-            order = request.args.get(f"order{sort_param[-1]}", "asc")
-            query = query.order(request.args[sort_param], desc=(order == "desc"))
+    for sort_field, order in sort_params:
+        if sort_field:
+            query = query.order(sort_field, desc=(order == "desc"))
     return query
+
+# -----------------------------------------------------------------------------
+# Blueprints y rutas
+# -----------------------------------------------------------------------------
+
+# Blueprint para Transferencias
+transferencias_bp = Blueprint("transferencias", __name__)
 
 @transferencias_bp.route("/")
 @login_required
 def index():
-    """Muestra la lista de transferencias"""
     try:
-        # Obtener lista de clientes únicos
-        clientes_response = supabase.table("transferencias").select("cliente").execute()
-        clientes = sorted(list(set(t["cliente"] for t in clientes_response.data)))
-        
-        # Obtener lista de empresas únicas
-        empresas_response = supabase.table("transferencias").select("empresa").execute()
-        empresas = sorted(list(set(t["empresa"] for t in empresas_response.data)))
-        empresas.insert(0, "Todas")
-        
-        # Construir la consulta base
-        query = supabase.table("transferencias").select("*")
-        
+        # Iniciar la consulta base
+        query = supabase.table("transferencias").select(
+            "id, cliente, empresa, rut, monto, fecha, fecha_detec, verificada, manual"
+        )
+
         # Aplicar filtros
-        query = filter_transferencias(query)
-        
+        cliente = request.args.get("cliente")
+        if cliente:
+            query = query.eq("cliente", cliente)
+
+        rut = request.args.get("rut")
+        if rut:
+            query = query.ilike("rut", f"%{rut}%")
+
+        monto = request.args.get("monto", "").replace(".", "").strip()
+        if monto:
+            try:
+                query = query.eq("monto", int(monto))
+            except ValueError:
+                logging.warning("Valor de monto no válido: %s", monto)
+
+        verificada = request.args.get("verificada")
+        if verificada == "true":
+            query = query.eq("verificada", True)
+        elif verificada == "false":
+            query = query.eq("verificada", False)
+
+        empresas = request.args.getlist("empresa")
+        if empresas:
+            query = query.in_("empresa", empresas)
+
         # Aplicar ordenamiento
-        sort_params = ["sort1", "sort2", "sort3"]
-        query = apply_ordering(query, sort_params)
-        
+        sort_fields = []
+        for i in range(1, 4):  # Para sort1, sort2, sort3
+            sort = request.args.get(f"sort{i}")
+            order = request.args.get(f"order{i}", "asc")
+            if sort:
+                query = query.order(sort, desc=(order == "desc"))
+
+        # Si no hay ordenamiento específico, ordenar por fecha_detec descendente
+        if not any(request.args.get(f"sort{i}") for i in range(1, 4)):
+            query = query.order("fecha_detec", desc=True)
+
         # Ejecutar la consulta
-        response = query.execute()
-        transferencias = response.data
+        response_transfers = query.execute()
+
+        transfers_data = []
+        if response_transfers.data:
+            for transfer in response_transfers.data:
+                # Convertir los datos a su tipo correcto y manejar valores nulos
+                transfer_processed = {
+                    'id': transfer.get('id'),
+                    'cliente': transfer.get('cliente') if transfer.get('cliente') is not None else 'Desconocido',
+                    'empresa': transfer.get('empresa') if transfer.get('empresa') is not None else '',
+                    'rut': transfer.get('rut') if transfer.get('rut') is not None else '',
+                    'monto': float(transfer.get('monto', 0)),
+                    'fecha': transfer.get('fecha') if transfer.get('fecha') is not None else '',
+                    'fecha_detec': transfer.get('fecha_detec') if transfer.get('fecha_detec') is not None else '',
+                    'verificada': bool(transfer.get('verificada', False)),
+                    'manual': bool(transfer.get('manual', False))
+                }
+                transfers_data.append(transfer_processed)
+
+        # Obtener lista única de clientes y empresas
+        response_pagadores = supabase.table("pagadores").select("cliente").execute()
+        clientes = sorted(set(p["cliente"] for p in response_pagadores.data)) if response_pagadores.data else []
         
+        # Obtener lista única de empresas de la tabla transferencias
+        response_empresas = supabase.table("transferencias").select("empresa").execute()
+        empresas = sorted(set(e["empresa"] for e in response_empresas.data if e["empresa"] is not None)) if response_empresas.data else []
+        empresas = ["Todas"] + empresas  # Agregar opción "Todas" al inicio
+
         return render_template(
             "transferencias.html",
-            transfers=transferencias,
+            transfers=transfers_data,
             cliente=clientes,
             empresas=empresas,
             active_page="transferencias"
         )
     except Exception as e:
-        logging.error(f"Error en index de transferencias: {str(e)}")
-        flash("Error al cargar las transferencias", "error")
-        return redirect(url_for("index"))
+        logging.error(f"Error al obtener transferencias: {e}")
+        flash("Error al cargar los datos de transferencias", "error")
+        return render_template(
+            "transferencias.html",
+            transfers=[],
+            cliente=[],
+            empresas=[],
+            active_page="transferencias"
+        )
 
 @transferencias_bp.route("/nuevo", methods=["GET", "POST"])
 @login_required
 def nuevo():
-    """Crea una nueva transferencia"""
     if request.method == "POST":
         try:
-            data = {
-                "cliente": request.form["cliente"],
-                "empresa": request.form["empresa"],
-                "rut": request.form["rut"],
-                "monto": float(request.form["monto"]),
-                "fecha": datetime.strptime(request.form["fecha"], "%Y-%m-%d"),
-                "fecha_detec": datetime.now(),
-                "verificada": False,
+            cliente = request.form.get("cliente")
+            empresa = request.form.get("empresa")
+            rut = request.form.get("rut")
+            monto = int(float(request.form.get("monto")))
+            fecha = request.form.get("fecha")
+            verificada = True if request.form.get("verificada") == "on" else False
+            fecha_detec = datetime.now(local_tz).isoformat()
+            data = f"{cliente}-{empresa}-{rut}-{monto}-{fecha}-{verificada}"
+            hash_value = hashlib.sha256(data.encode('utf-8')).hexdigest()
+            supabase.table("transferencias").insert({
+                "cliente": cliente,
+                "empresa": empresa,
+                "rut": rut,
+                "monto": monto,
+                "fecha": fecha,
+                "fecha_detec": fecha_detec,
+                "verificada": verificada,
+                "hash": hash_value,
                 "manual": True
-            }
-            
-            response = supabase.table("transferencias").insert(data).execute()
-            flash("Transferencia creada exitosamente", "success")
-            return redirect(url_for("transferencias.index"))
+            }).execute()
+            flash("Transferencia ingresada con éxito.")
+            return redirect(url_for("transferencias.nuevo"))
         except Exception as e:
-            logging.error(f"Error al crear transferencia: {str(e)}")
-            flash("Error al crear la transferencia", "error")
-            return redirect(url_for("transferencias.index"))
-    
-    return render_template("nuevo_transferencia.html", active_page="transferencias")
+            logging.error("Error al insertar transferencia: %s", e)
+            flash("Error al ingresar la transferencia: " + str(e))
+            return redirect(url_for("transferencias.nuevo"))
+    current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    try:
+        response_pagadores = supabase.table("pagadores").select("cliente").execute()
+        cliente_pagadores = [p["cliente"] for p in response_pagadores.data] if response_pagadores.data else []
+    except Exception as e:
+        logging.error("Error al obtener clientes para transferencia: %s", e)
+        cliente_pagadores = []
+    empresa_options = ["Caja Vecina", "Depósito en efectivo", "Otro"]
+    return render_template("nuevo_transferencia.html", current_date=current_date, active_page="transferencias",
+                           cliente_pagadores=cliente_pagadores, empresa_options=empresa_options)
 
 @transferencias_bp.route("/editar/<transfer_id>", methods=["GET", "POST"])
 @login_required
 def editar_transferencia(transfer_id):
-    """Edita una transferencia existente"""
-    if request.method == "POST":
-        try:
-            data = {
-                "cliente": request.form["cliente"],
-                "empresa": request.form["empresa"],
-                "rut": request.form["rut"],
-                "monto": float(request.form["monto"]),
-                "fecha": datetime.strptime(request.form["fecha"], "%Y-%m-%d")
-            }
-            
-            response = supabase.table("transferencias").update(data).eq("id", transfer_id).execute()
-            flash("Transferencia actualizada exitosamente", "success")
-            return redirect(url_for("transferencias.index"))
-        except Exception as e:
-            logging.error(f"Error al actualizar transferencia: {str(e)}")
-            flash("Error al actualizar la transferencia", "error")
-            return redirect(url_for("transferencias.index"))
-    
     try:
         response = supabase.table("transferencias").select("*").eq("id", transfer_id).execute()
+        if not response.data:
+            flash("Transferencia no encontrada.")
+            return redirect(url_for("transferencias.index"))
         transferencia = response.data[0]
-        return render_template("editar_transferencia.html", transfer=transferencia, active_page="transferencias")
     except Exception as e:
-        logging.error(f"Error al cargar transferencia: {str(e)}")
-        flash("Error al cargar la transferencia", "error")
+        logging.error("Error al obtener la transferencia: %s", e)
+        flash("Error al obtener la transferencia: " + str(e))
         return redirect(url_for("transferencias.index"))
+    if not transferencia.get("manual", False):
+        flash("Esta transferencia no puede ser editada porque no fue ingresada manualmente.")
+        return redirect(url_for("transferencias.index"))
+    if request.method == "POST":
+        try:
+            cliente = request.form.get("cliente")
+            empresa = request.form.get("empresa")
+            rut = request.form.get("rut")
+            monto = int(float(request.form.get("monto")))
+            fecha = request.form.get("fecha")
+            verificada = True if request.form.get("verificada") == "on" else False
+            data = f"{cliente}-{empresa}-{rut}-{monto}-{fecha}-{verificada}"
+            hash_value = hashlib.sha256(data.encode('utf-8')).hexdigest()
+            supabase.table("transferencias").update({
+                "cliente": cliente,
+                "empresa": empresa,
+                "rut": rut,
+                "monto": monto,
+                "fecha": fecha,
+                "verificada": verificada,
+                "hash": hash_value
+            }).eq("id", transfer_id).execute()
+            flash("Transferencia actualizada con éxito.")
+            return redirect(url_for("transferencias.index"))
+        except Exception as e:
+            logging.error("Error al actualizar la transferencia: %s", e)
+            flash("Error al actualizar la transferencia: " + str(e))
+            return redirect(url_for("transferencias.editar_transferencia", transfer_id=transfer_id))
+    current_date = transferencia.get("fecha", datetime.now(local_tz).strftime("%Y-%m-%d"))
+    try:
+        response_pagadores = supabase.table("pagadores").select("cliente").execute()
+        cliente_pagadores = [p["cliente"] for p in response_pagadores.data] if response_pagadores.data else []
+    except Exception as e:
+        logging.error("Error al obtener clientes para transferencia: %s", e)
+        cliente_pagadores = []
+    empresa_options = ["Caja Vecina", "Depósito en efectivo", "Otro"]
+    return render_template(
+        "editar_transferencia.html",
+        transferencia=transferencia,
+        current_date=current_date,
+        cliente_pagadores=cliente_pagadores,
+        empresa_options=empresa_options,
+        active_page="transferencias"
+    )
+
+# Blueprint para Pedidos
+pedidos_bp = Blueprint("pedidos", __name__)
 
 @pedidos_bp.route("/")
 @login_required
 def index():
-    """Muestra la lista de pedidos"""
     try:
-        # Obtener lista de clientes únicos
-        clientes_response = supabase.table("pedidos").select("cliente").execute()
-        clientes = sorted(list(set(p["cliente"] for p in clientes_response.data)))
-        
-        # Construir la consulta base
-        query = supabase.table("pedidos").select("*")
-        
-        # Aplicar filtros
+        query = supabase.table("pedidos").select("id, cliente, fecha, brs, tasa, clp")
         query = filter_pedidos(query)
-        
-        # Aplicar ordenamiento
-        sort_params = ["sort1", "sort2", "sort3"]
-        query = apply_ordering(query, sort_params)
-        
-        # Ejecutar la consulta
+        query = query.order("fecha", desc=False)
         response = query.execute()
-        pedidos = response.data
-        
-        return render_template(
-            "pedidos.html",
-            pedidos=pedidos,
-            clientes=clientes,
-            active_page="pedidos"
-        )
+        pedidos_data = response.data if response.data is not None else []
+        clientes = sorted({p["cliente"] for p in pedidos_data if p.get("cliente")})
     except Exception as e:
-        logging.error(f"Error en index de pedidos: {str(e)}")
-        flash("Error al cargar los pedidos", "error")
-        return redirect(url_for("index"))
+        logging.error("Error al cargar los pedidos: %s", e)
+        flash("Error al cargar los pedidos: " + str(e))
+        pedidos_data, clientes = [], []
+    current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    return render_template("pedidos.html", pedidos=pedidos_data, cliente=clientes, active_page="pedidos",
+                           current_date=current_date)
 
 @pedidos_bp.route("/nuevo", methods=["GET", "POST"])
 @login_required
 def nuevo():
-    """Crea un nuevo pedido"""
+    try:
+        response_pagadores = supabase.table("pagadores").select("cliente").execute()
+        cliente_pagadores = [p["cliente"] for p in response_pagadores.data] if response_pagadores.data else []
+    except Exception as e:
+        logging.error("Error al obtener cliente de pagadores: %s", e)
+        cliente_pagadores = []
     if request.method == "POST":
         try:
-            data = {
-                "cliente": request.form["cliente"],
-                "producto": request.form["producto"],
-                "cantidad": int(request.form["cantidad"]),
-                "precio": float(request.form["precio"]),
-                "fecha": datetime.now(),
-                "estado": "pendiente"
-            }
-            
-            response = supabase.table("pedidos").insert(data).execute()
-            flash("Pedido creado exitosamente", "success")
-            return redirect(url_for("pedidos.index"))
+            cliente = request.form.get("cliente")
+            brs = int(float(request.form.get("brs")))
+            tasa = float(request.form.get("tasa"))
+            fecha = request.form.get("fecha")
+            usuario = session.get("email")
+            supabase.table("pedidos").insert({
+                "cliente": cliente, "brs": brs, "tasa": tasa, "fecha": fecha, "usuario": usuario
+            }).execute()
+            flash("Pedido ingresado con éxito.")
+            return redirect(url_for("pedidos.nuevo"))
         except Exception as e:
-            logging.error(f"Error al crear pedido: {str(e)}")
-            flash("Error al crear el pedido", "error")
-            return redirect(url_for("pedidos.index"))
-    
-    return render_template("nuevo_pedido.html", active_page="pedidos")
+            logging.error("Error al insertar pedido: %s", e)
+            flash("Error al insertar pedido: " + str(e))
+            return redirect(url_for("pedidos.nuevo"))
+    current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    return render_template("nuevo_pedido.html", cliente_pagadores=cliente_pagadores, current_date=current_date,
+                           active_page="pedidos")
 
 @pedidos_bp.route("/editar/<pedido_id>", methods=["GET", "POST"])
 @login_required
 def editar(pedido_id):
-    """Edita un pedido existente"""
+    try:
+        response_pagadores = supabase.table("pagadores").select("cliente").execute()
+        cliente_pagadores = [p["cliente"] for p in response_pagadores.data] if response_pagadores.data else []
+    except Exception as e:
+        logging.error("Error al obtener cliente de pagadores: %s", e)
+        cliente_pagadores = []
+    try:
+        pedido_response = supabase.table("pedidos").select("id, cliente, fecha, brs, tasa, clp").eq("id", pedido_id).execute()
+        if not pedido_response.data:
+            flash("Pedido no encontrado.")
+            return redirect(url_for("pedidos.index"))
+        pedido = pedido_response.data[0]
+    except Exception as e:
+        logging.error("Error al obtener pedido: %s", e)
+        flash("Error al obtener pedido: " + str(e))
+        return redirect(url_for("pedidos.index"))
+    logs = []
+    try:
+        logs_response = supabase.table("pedidos_log").select("*").eq("pedido_id", pedido_id).order("fecha", desc=True).execute()
+        logs = logs_response.data if logs_response.data is not None else []
+    except Exception as e:
+        logging.error("Error al obtener historial de cambios: %s", e)
     if request.method == "POST":
         try:
-            data = {
-                "cliente": request.form["cliente"],
-                "producto": request.form["producto"],
-                "cantidad": int(request.form["cantidad"]),
-                "precio": float(request.form["precio"]),
-                "estado": request.form["estado"]
-            }
-            
-            response = supabase.table("pedidos").update(data).eq("id", pedido_id).execute()
-            flash("Pedido actualizado exitosamente", "success")
+            nuevo_cliente = request.form.get("cliente")
+            nuevo_brs = int(float(request.form.get("brs")))
+            nuevo_tasa = float(request.form.get("tasa"))
+            nuevo_fecha = request.form.get("fecha")
+            cambios = []
+            if pedido["cliente"] != nuevo_cliente:
+                cambios.append(f"cliente: {pedido['cliente']} -> {nuevo_cliente}")
+            if int(pedido["brs"]) != nuevo_brs:
+                cambios.append(f"brs: {pedido['brs']} -> {nuevo_brs}")
+            if float(pedido["tasa"]) != nuevo_tasa:
+                cambios.append(f"tasa: {pedido['tasa']} -> {nuevo_tasa}")
+            if pedido["fecha"] != nuevo_fecha:
+                cambios.append(f"fecha: {pedido['fecha']} -> {nuevo_fecha}")
+            supabase.table("pedidos").update({
+                "cliente": nuevo_cliente, "brs": nuevo_brs, "tasa": nuevo_tasa, "fecha": nuevo_fecha
+            }).eq("id", pedido_id).execute()
+            if cambios:
+                cambios_str = "; ".join(cambios)
+                try:
+                    supabase.table("pedidos_log").insert({
+                        "pedido_id": pedido_id, "usuario": session.get("email"), "cambios": cambios_str,
+                        "fecha": datetime.now(local_tz).isoformat()
+                    }).execute()
+                except Exception as log_error:
+                    logging.error("Error al insertar en el log de cambios: %s", log_error)
+                    flash("Error al registrar el historial de cambios: " + str(log_error))
+            flash("Pedido actualizado con éxito.")
             return redirect(url_for("pedidos.index"))
         except Exception as e:
-            logging.error(f"Error al actualizar pedido: {str(e)}")
-            flash("Error al actualizar el pedido", "error")
-            return redirect(url_for("pedidos.index"))
-    
-    try:
-        response = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
-        pedido = response.data[0]
-        return render_template("editar_pedido.html", pedido=pedido, active_page="pedidos")
-    except Exception as e:
-        logging.error(f"Error al cargar pedido: {str(e)}")
-        flash("Error al cargar el pedido", "error")
-        return redirect(url_for("pedidos.index"))
+            logging.error("Error al actualizar pedido: %s", e)
+            flash("Error al actualizar pedido: " + str(e))
+            return redirect(url_for("pedidos.editar", pedido_id=pedido_id))
+    return render_template("editar_pedido.html", pedido=pedido, cliente_pagadores=cliente_pagadores, logs=logs,
+                           active_page="pedidos")
+
+# Blueprint para Dashboard
+dashboard_bp = Blueprint("dashboard", __name__)
 
 @dashboard_bp.route("/")
 @login_required
 @cache.cached(timeout=60, query_string=True)
 def index():
-    """Muestra el dashboard principal"""
     try:
-        # Obtener datos de transferencias
-        transferencias_response = supabase.table("transferencias").select("*").execute()
-        transferencias = transferencias_response.data
-        
-        # Calcular totales
-        total_transferencias = sum(t["monto"] for t in transferencias)
-        total_verificadas = sum(t["monto"] for t in transferencias if t["verificada"])
-        
-        # Obtener datos de pedidos
-        pedidos_response = supabase.table("pedidos").select("*").execute()
-        pedidos = pedidos_response.data
-        
-        # Calcular totales de pedidos
-        total_pedidos = len(pedidos)
-        total_pendientes = len([p for p in pedidos if p["estado"] == "pendiente"])
-        
-        return render_template(
-            "dashboard.html",
-            total_transferencias=total_transferencias,
-            total_verificadas=total_verificadas,
-            total_pedidos=total_pedidos,
-            total_pendientes=total_pendientes,
-            active_page="dashboard"
-        )
+        current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha_inicio = request.args.get("fecha_inicio", current_date)
+        fecha_fin = request.args.get("fecha_fin", current_date)
+        rpc_response = supabase.rpc("get_dashboard_aggregates",
+                                    {"fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin}).execute()
+        dashboard_list = rpc_response.data if rpc_response.data is not None else []
+        dashboard_list = sorted(dashboard_list, key=lambda item: item.get("cliente", "").lower())
+        global_total_brs = sum(item.get("total_brs", 0) for item in dashboard_list)
+        global_total_clp = sum(item.get("total_clp", 0) for item in dashboard_list)
+        global_total_pagos = sum(item.get("total_pagos", 0) for item in dashboard_list)
+        deuda_response = supabase.table("deuda_anterior").select("cliente, deuda").execute()
+        deuda_data = deuda_response.data if deuda_response.data is not None else []
+        deuda_dict = {d["cliente"]: float(d["deuda"]) for d in deuda_data}
+        for item in dashboard_list:
+            deuda_cliente = deuda_dict.get(item["cliente"], 0)
+            item["saldo"] = item.get("total_clp", 0) - item.get("total_pagos", 0) + deuda_cliente
+        global_total_saldo = sum(item["saldo"] for item in dashboard_list)
     except Exception as e:
-        logging.error(f"Error en dashboard: {str(e)}")
-        flash("Error al cargar el dashboard", "error")
-        return redirect(url_for("index"))
+        logging.error("Error al generar el dashboard: %s", e)
+        flash("Error al generar el dashboard: " + str(e))
+        dashboard_list = []
+        global_total_brs = global_total_clp = global_total_pagos = global_total_saldo = 0
+        current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    return render_template("dashboard.html", dashboard_list=dashboard_list, current_date=current_date,
+                           global_total_brs=global_total_brs, global_total_clp=global_total_clp,
+                           global_total_pagos=global_total_pagos, global_total_saldo=global_total_saldo,
+                           active_page="dashboard")
 
 @dashboard_bp.route("/detalle/<cliente>")
 @login_required
 @cache.cached(timeout=60, query_string=True)
 def detalle(cliente):
-    """Muestra el detalle de un cliente en el dashboard"""
     try:
-        # Obtener transferencias del cliente
-        transferencias_response = supabase.table("transferencias").select("*").eq("cliente", cliente).execute()
-        transferencias = transferencias_response.data
-        
-        # Obtener pedidos del cliente
-        pedidos_response = supabase.table("pedidos").select("*").eq("cliente", cliente).execute()
-        pedidos = pedidos_response.data
-        
-        return render_template(
-            "dashboard_detalle.html",
-            cliente=cliente,
-            transferencias=transferencias,
-            pedidos=pedidos,
-            active_page="dashboard"
-        )
+        current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha_inicio = request.args.get("fecha_inicio", current_date)
+        fecha_fin = request.args.get("fecha_fin", current_date)
+        try:
+            page = int(request.args.get("page", 1))
+        except ValueError:
+            page = 1
+        per_page = 10
+        query = supabase.table("pedidos").select("id, cliente, fecha, brs, tasa, clp") \
+            .eq("cliente", cliente) \
+            .gte("fecha", fecha_inicio) \
+            .lte("fecha", fecha_fin)
+        query = query.range((page - 1) * per_page, page * per_page - 1)
+        response = query.execute()
+        pedidos_data = response.data if response.data is not None else []
+        count_response = supabase.table("pedidos").select("id", count="exact") \
+            .eq("cliente", cliente) \
+            .gte("fecha", fecha_inicio) \
+            .lte("fecha", fecha_fin).execute()
+        total_count = count_response.count if count_response.count is not None else 0
+        total_pages = (total_count + per_page - 1) // per_page
     except Exception as e:
-        logging.error(f"Error en detalle de dashboard: {str(e)}")
-        flash("Error al cargar el detalle del cliente", "error")
-        return redirect(url_for("dashboard.index"))
+        logging.error("Error al obtener el detalle para el cliente %s: %s", cliente, e)
+        flash("Error al obtener el detalle: " + str(e))
+        pedidos_data = []
+        total_pages = 0
+        page = 1
+        fecha_inicio = fecha_fin = current_date
+    return render_template("dashboard_detalle.html", pedidos=pedidos_data, cliente=cliente, fecha_inicio=fecha_inicio,
+                           fecha_fin=fecha_fin, page=page, total_pages=total_pages)
+
+# Blueprint para el módulo restringido (admin)
+admin_bp = Blueprint("admin", __name__)
 
 @admin_bp.route("/")
 @login_required
 @user_allowed
 def index():
-    """Muestra la página principal del módulo de administración"""
-    return render_template("admin.html", active_page="admin")
+    return redirect(url_for('admin.tasa_compras'))
 
 @admin_bp.route("/calcular_margen", methods=["GET"])
 @login_required
 @user_allowed
 def calcular_margen():
-    """Calcula el margen de ganancia"""
-    try:
-        # Obtener datos necesarios para el cálculo
-        response = supabase.table("configuracion").select("*").execute()
-        config = response.data[0]
-        
-        margen = (config["precio_venta"] - config["precio_compra"]) / config["precio_compra"] * 100
-        
-        return render_template("margen_resultado.html", margen=margen, active_page="admin")
-    except Exception as e:
-        logging.error(f"Error al calcular margen: {str(e)}")
-        flash("Error al calcular el margen", "error")
-        return redirect(url_for("admin.index"))
+    fecha = request.args.get("fecha")
+    if not fecha:
+        flash("Debe seleccionar una fecha para calcular el margen.", "warning")
+        return redirect(url_for("admin.margen"))
+    margen_calculado = 1234.56  # Placeholder, reemplaza con lógica real si aplica
+    return render_template("margen_resultado.html", active_page="admin", fecha=fecha, margin=margen_calculado)
 
 @admin_bp.route("/tasa_compras", methods=["GET"])
 @login_required
 @user_allowed
 def tasa_compras():
-    """Muestra la tasa de compras"""
+    fecha = request.args.get("fecha")
+    if not fecha:
+        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+    inicio = fecha + "T00:00:00"
+    fin = fecha + "T23:59:59"
     try:
-        # Obtener datos de compras
-        response = supabase.table("compras").select("*").execute()
-        compras = response.data
-        
-        return render_template("tasa_compras.html", compras=compras, active_page="admin")
+        response = supabase.table("vista_compras_fifo") \
+            .select("totalprice, paymethodname, createtime, unitprice, costo_no_vendido") \
+            .eq("fiat", "VES") \
+            .gte("createtime", inicio) \
+            .lte("createtime", fin) \
+            .execute()
+        compras_data = response.data if response.data else []
+        query = supabase.table("vista_compras_fifo").select("costo_no_vendido") \
+            .eq("fiat", "VES") \
+            .gte("createtime", inicio) \
+            .lte("createtime", fin) \
+            .order("createtime", desc=True) \
+            .limit(1) \
+            .execute()
+        if query.data:
+            costo_no_vendido = query.data[0]["costo_no_vendido"]
+        else:
+            costo_no_vendido = None
+        for row in compras_data:
+            if costo_no_vendido:
+                row['tasa'] = round(row['unitprice'] / costo_no_vendido, 6)
     except Exception as e:
-        logging.error(f"Error al cargar tasa de compras: {str(e)}")
-        flash("Error al cargar la tasa de compras", "error")
-        return redirect(url_for("admin.index"))
+        logging.error("Error al obtener los datos: %s", e)
+        compras_data = []
+    return render_template("tasa_compras.html", active_page="admin",
+                           compras_data=compras_data, fecha=fecha)
 
 @admin_bp.route("/ingresar_usdt", methods=["GET", "POST"])
 @login_required
 @user_allowed
 def ingresar_usdt():
-    """Permite ingresar USDT"""
     if request.method == "POST":
         try:
-            data = {
-                "cantidad": float(request.form["cantidad"]),
-                "precio": float(request.form["precio"]),
-                "fecha": datetime.now()
-            }
+            totalprice_str = request.form.get("totalprice", "")
+            if not totalprice_str:
+                flash("El campo Total Price es requerido.")
+                return redirect(url_for("admin.ingresar_usdt"))
             
-            response = supabase.table("usdt").insert(data).execute()
-            flash("USDT ingresado exitosamente", "success")
-            return redirect(url_for("admin.index"))
+            totalprice = float(totalprice_str.replace(".", "").replace(",", ".").strip())
+            tasa_str = request.form.get("tasa")
+            tasa = float(tasa_str)
+            tradetype = request.form.get("tradetype")
+            fiat = request.form.get("fiat")
+            asset = "USDT"
+            paymethodname = "OTC"
+            orderstatus = "COMPLETED"
+            amount = totalprice / tasa
+            costo_real = amount
+            commission = 0
+            createtime = request.form.get("createtime")
+            # Asegurarse de que la fecha está en la zona horaria correcta
+            dt_createtime = datetime.strptime(createtime, "%Y-%m-%dT%H:%M")
+            dt_createtime = local_tz.localize(dt_createtime)
+            createtime = dt_createtime.isoformat()
+            hash_input = f"{totalprice}{tasa}{tradetype}{fiat}{asset}{createtime}"
+            ordernumber = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()[:20]
+            response = supabase.table("compras").insert({
+                "totalprice": totalprice,
+                "unitprice": tasa,
+                "tradetype": tradetype,
+                "fiat": fiat,
+                "asset": asset,
+                "amount": amount,
+                "costo_real": costo_real,
+                "commission": commission,
+                "paymethodname": paymethodname,
+                "createtime": createtime,
+                "orderstatus": orderstatus,
+                "ordernumber": ordernumber
+            }).execute()
+            flash("Compra de USDT ingresada con éxito.")
+            return redirect(url_for("admin.ingresar_usdt"))
         except Exception as e:
-            logging.error(f"Error al ingresar USDT: {str(e)}")
-            flash("Error al ingresar USDT", "error")
-            return redirect(url_for("admin.index"))
+            logging.error("Error al ingresar compra de USDT: %s", e)
+            flash("Error al ingresar la compra de USDT: " + str(e))
+            return redirect(url_for("admin.ingresar_usdt"))
     
-    return render_template("ingresar_usdt.html", active_page="admin")
+    # Asegurarse de que la fecha actual está en la zona horaria correcta
+    current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
+    tradetype_options = ["BUY", "SELL"]
+    fiat_options = ["CLP", "VES", "USD"]
+    
+    # Renderizar el template sin valor por defecto para totalprice
+    return render_template("ingresar_usdt.html", 
+                         active_page="admin", 
+                         current_datetime=current_datetime,
+                         tradetype_options=tradetype_options, 
+                         fiat_options=fiat_options,
+                         totalprice="")  # Enviamos un string vacío explícitamente
 
 @admin_bp.route("/tasa_actual", methods=["GET"])
 @login_required
 @user_allowed
 def tasa_actual():
-    """Muestra la tasa actual"""
     try:
-        # Obtener datos de tasas
-        response = supabase.table("tasas").select("*").order("fecha", desc=True).limit(1).execute()
-        tasa = response.data[0] if response.data else None
-        
-        return render_template("tasa_actual.html", tasa=tasa, active_page="admin")
+        query = supabase.table("vista_compras_fifo").select("costo_no_vendido, createtime, stock_usdt") \
+            .order("createtime", desc=True) \
+            .limit(1)
+        response = query.execute()
+        if response.data and len(response.data) > 0:
+            record = response.data[0]
+            costo_no_vendido = record.get("costo_no_vendido")
+            stock_usdt = record.get("stock_usdt")
+        else:
+            costo_no_vendido = None
+            stock_usdt = None
+            flash("No se encontró ningún registro.", "warning")
     except Exception as e:
-        logging.error(f"Error al cargar tasa actual: {str(e)}")
-        flash("Error al cargar la tasa actual", "error")
-        return redirect(url_for("admin.index"))
+        logging.error("Error al obtener la tasa actual desde Supabase: %s", e)
+        flash("Error al obtener la tasa actual: " + str(e), "danger")
+        costo_no_vendido = None
+        stock_usdt = None
+
+    resultado_banesco = None
+    resultado_bank = None
+
+    if costo_no_vendido is not None:
+        try:
+            async def obtener_valores():
+                logging.info("Intentando obtener valor de Banesco...")
+                banesco_val = await obtener_valor_usdt_por_banco("Banesco")
+                logging.info(f"Valor de Banesco obtenido: {banesco_val}")
+                
+                logging.info("Intentando obtener valor de BANK...")
+                bank_val = await obtener_valor_usdt_por_banco("BANK")
+                logging.info(f"Valor de BANK obtenido: {bank_val}")
+                
+                return banesco_val, bank_val
+            banesco_val, bank_val = asyncio.run(obtener_valores())
+            if banesco_val and bank_val:
+                resultado_banesco = round(float(banesco_val) / float(costo_no_vendido), 6)
+                resultado_bank = round(float(bank_val) / float(costo_no_vendido), 6)
+                logging.info(f"Tasas calculadas - Banesco: {resultado_banesco}, Venezuela: {resultado_bank}")
+            else:
+                logging.warning("No se pudieron obtener los valores de los bancos")
+                flash("No se pudieron obtener las tasas de conversión de Banesco y BANK.", "warning")
+        except Exception as e:
+            logging.error("Error al obtener valores USDT/VES: %s", e)
+            flash("Error al obtener valores USDT/VES: " + str(e), "danger")
+
+    return render_template(
+        "tasa_actual.html",
+        active_page="admin",
+        costo_no_vendido=costo_no_vendido,
+        stock_usdt=stock_usdt,
+        resultado_banesco=resultado_banesco,
+        resultado_bank=resultado_bank
+    )
 
 @admin_bp.route("/cierre_dia", methods=["GET", "POST"])
 @login_required
 @user_allowed
 def cierre_dia():
-    """Realiza el cierre del día"""
     if request.method == "POST":
+        fecha = request.form.get("fecha")
         try:
-            # Obtener datos del día
-            fecha = datetime.now().strftime("%Y-%m-%d")
-            transferencias_response = supabase.table("transferencias").select("*").eq("fecha", fecha).execute()
-            transferencias = transferencias_response.data
-            
-            pedidos_response = supabase.table("pedidos").select("*").eq("fecha", fecha).execute()
-            pedidos = pedidos_response.data
-            
-            # Calcular totales
-            total_transferencias = sum(t["monto"] for t in transferencias)
-            total_pedidos = sum(p["precio"] * p["cantidad"] for p in pedidos)
-            
-            # Guardar cierre
-            data = {
-                "fecha": fecha,
-                "total_transferencias": total_transferencias,
-                "total_pedidos": total_pedidos
-            }
-            
-            response = supabase.table("cierre_dia").insert(data).execute()
-            flash("Cierre del día realizado exitosamente", "success")
-            return redirect(url_for("admin.index"))
+            pedidos_response = supabase.table("pedidos").select("cliente, clp").eq("fecha", fecha).execute()
+            pedidos_data = pedidos_response.data if pedidos_response.data is not None else []
+            pedidos_totales = {}
+            for p in pedidos_data:
+                pedidos_totales[p["cliente"]] = pedidos_totales.get(p["cliente"], 0) + p["clp"]
+
+            filtrar_verificadas = True
+            pagos_query = supabase.table("transferencias").select("id, cliente, monto, fecha").eq("fecha", fecha)
+            if filtrar_verificadas:
+                pagos_query = pagos_query.eq("verificada", True)
+            pagos_response = pagos_query.execute()
+            pagos_data = pagos_response.data if pagos_response.data is not None else []
+            pagos_totales = {}
+            for p in pagos_data:
+                hash_actual = generar_hash_transferencia(p)
+                check_resp = supabase.table("pagos_procesados").select("*").eq("hash", hash_actual).execute()
+                if not check_resp.data:
+                    pagos_totales[p["cliente"]] = pagos_totales.get(p["cliente"], 0) + p["monto"]
+                    supabase.table("pagos_procesados").insert({
+                        "transferencia_id": p["id"],
+                        "hash": hash_actual,
+                        "fecha_procesada": datetime.now(local_tz).strftime("%Y-%m-%d")
+                    }).execute()
+            clientes = set(list(pedidos_totales.keys()) + list(pagos_totales.keys()))
+            for cliente in clientes:
+                total_pedidos = pedidos_totales.get(cliente, 0)
+                total_pagos = pagos_totales.get(cliente, 0)
+                deuda_resp = supabase.table("deuda_anterior").select("deuda").eq("cliente", cliente).execute()
+                deuda_anterior = deuda_resp.data[0]["deuda"] if deuda_resp.data else 0
+                saldo_final = total_pedidos - total_pagos + deuda_anterior
+                fecha_obj = datetime.strptime(fecha, "%Y-%m-%d")
+                nueva_fecha = (fecha_obj + timedelta(days=1)).strftime("%Y-%m-%d")
+                check_resp = supabase.table("deuda_anterior").select("*").eq("cliente", cliente).eq("fecha", nueva_fecha).execute()
+                if check_resp.data:
+                    supabase.table("deuda_anterior").update({"deuda": saldo_final}).eq("cliente", cliente).eq("fecha", nueva_fecha).execute()
+                else:
+                    supabase.table("deuda_anterior").insert(
+                        {"cliente": cliente, "deuda": saldo_final, "fecha": nueva_fecha}).execute()
+            flash("Cierre de día realizado con éxito para la fecha " + fecha)
         except Exception as e:
-            logging.error(f"Error al realizar cierre del día: {str(e)}")
-            flash("Error al realizar el cierre del día", "error")
-            return redirect(url_for("admin.index"))
-    
+            logging.error("Error en el cierre de día: %s", e)
+            flash("Error en el cierre de día: " + str(e))
+        return redirect(url_for("admin.index"))
     return render_template("cierre_dia.html", active_page="admin")
 
 @admin_bp.route("/margen", methods=["GET"])
 @login_required
 @user_allowed
 def margen():
-    """Muestra el margen de ganancia"""
-    try:
-        # Obtener datos de margen
-        response = supabase.table("margen").select("*").order("fecha", desc=True).limit(1).execute()
-        margen = response.data[0] if response.data else None
-        
-        return render_template("margen.html", margen=margen, active_page="admin")
-    except Exception as e:
-        logging.error(f"Error al cargar margen: {str(e)}")
-        flash("Error al cargar el margen", "error")
-        return redirect(url_for("admin.index"))
+    return render_template("margen.html", active_page="admin")
 
 @admin_bp.route("/resumen_compras_usdt", methods=["GET"])
 @login_required
 @user_allowed
 def resumen_compras_usdt():
-    """Muestra el resumen de compras de USDT"""
+    fecha = request.args.get("fecha")
+    if not fecha:
+        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+    
+    inicio = fecha + "T00:00:00"
+    fin = fecha + "T23:59:59"
+    
     try:
-        # Obtener datos de compras
-        response = supabase.table("compras_usdt").select("*").execute()
-        compras = response.data
+        response = supabase.table("compras") \
+            .select("*") \
+            .eq("fiat", "CLP") \
+            .eq("tradetype", "BUY") \
+            .gte("createtime", inicio) \
+            .lte("createtime", fin) \
+            .execute()
         
-        return render_template("compras_utilidades.html", compras=compras, active_page="admin")
+        compras_data = response.data if response.data else []
+        compras_data.sort(key=lambda x: x.get("createtime", ""), reverse=True)
+        
+        # Calcular totales
+        total_clp = sum(compra.get("totalprice", 0) for compra in compras_data)
+        total_usdt = sum(compra.get("amount", 0) for compra in compras_data)
+        tasa_promedio = total_clp / total_usdt if total_usdt > 0 else 0
+        
+        return render_template(
+            "admin/resumen_compras_usdt.html",
+            active_page="admin",
+            compras_data=compras_data,
+            total_clp=total_clp,
+            total_usdt=total_usdt,
+            tasa_promedio=tasa_promedio,
+            fecha=fecha
+        )
     except Exception as e:
-        logging.error(f"Error al cargar resumen de compras: {str(e)}")
-        flash("Error al cargar el resumen de compras", "error")
+        logging.error("Error al obtener resumen de compras USDT: %s", e)
+        flash("Error al obtener el resumen de compras USDT.")
         return redirect(url_for("admin.index"))
 
+# Rutas generales
 @app.route("/")
 def index():
-    """Muestra la página principal"""
-    return render_template("index.html")
+    if "user_id" in session:
+        return redirect(url_for("transferencias.index"))
+    else:
+        return redirect(url_for("login"))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    """Maneja el inicio de sesión"""
     if request.method == "POST":
+        email = request.form.get("email")
+        password = request.form.get("password")
         try:
-            email = request.form["email"]
-            password = request.form["password"]
-            
-            # Verificar credenciales
-            response = supabase.table("users").select("*").eq("email", email).eq("password", password).execute()
-            if response.data:
-                session["user_id"] = response.data[0]["id"]
-                session["email"] = email
-                flash("Inicio de sesión exitoso", "success")
-                return redirect(url_for("index"))
-            else:
-                flash("Credenciales inválidas", "error")
+            auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         except Exception as e:
-            logging.error(f"Error en login: {str(e)}")
-            flash("Error al iniciar sesión", "error")
-    
-    return render_template("login.html")
+            logging.error("Error al iniciar sesión: %s", e)
+            flash("Error al iniciar sesión: " + str(e))
+            return redirect(url_for("login"))
+        if auth_response.session:
+            session["user_id"] = auth_response.user.id
+            session["email"] = auth_response.user.email
+            flash("¡Sesión iniciada con éxito!")
+            return redirect(url_for("transferencias.index"))
+        else:
+            flash("Credenciales incorrectas.")
+            return redirect(url_for("login"))
+    return render_template("login.html", title="Iniciar Sesión", active_page="")
 
 @app.route("/logout")
 @login_required
 def logout():
-    """Cierra la sesión del usuario"""
     session.clear()
-    flash("Sesión cerrada exitosamente", "success")
+    flash("Sesión cerrada.")
     return redirect(url_for("login"))
 
 @app.route("/update/<transfer_id>", methods=["POST"])
 @login_required
 def update_transfer(transfer_id):
-    """Actualiza una transferencia"""
+    nuevo_valor = request.form.get("nuevo_valor")
     try:
-        nuevo_valor = request.form.get("nuevo_valor") == "1"
-        response = supabase.table("transferencias").update({"verificada": nuevo_valor}).eq("id", transfer_id).execute()
-        flash("Transferencia actualizada exitosamente", "success")
-        return redirect(url_for("transferencias.index"))
+        nuevo_valor = bool(int(nuevo_valor))
     except Exception as e:
-        logging.error(f"Error al actualizar transferencia: {str(e)}")
-        flash("Error al actualizar la transferencia", "error")
-        return redirect(url_for("transferencias.index"))
+        logging.error("Error al convertir nuevo_valor: %s", e)
+        nuevo_valor = False
+    try:
+        result = supabase.table("transferencias").update({"verificada": nuevo_valor}).eq("id", transfer_id).execute()
+        if result.data and len(result.data) > 0:
+            flash(f"Registro actualizado (ID = {transfer_id}).")
+        else:
+            flash("No se encontró el registro para actualizar. Verifica las políticas de seguridad.")
+    except Exception as e:
+        logging.error("Error al actualizar el registro: %s", e)
+        flash("Error al actualizar el registro: " + str(e))
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(success=True)
+    return redirect(request.referrer or url_for("transferencias.index"))
 
+# Rutas para BCI
+@app.route("/bci/auth")
+@login_required
+def bci_auth():
+    """Inicia el proceso de autorización con BCI"""
+    try:
+        # Parámetros para la solicitud de autorización
+        auth_params = {
+            "response_type": "code",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "redirect_uri": "https://sancristobalspa.eu.pythonanywhere.com/bci/callback",
+            "scope": "customers accounts transactions payments",
+            "state": "bci_auth",  # Puedes generar un estado único si lo necesitas
+            "nonce": "bci_nonce"  # Puedes generar un nonce único si lo necesitas
+        }
+        
+        # Construir la URL de autorización
+        auth_url = f"https://apiprogram.bci.cl/sandbox/v1/api-oauth/authorize?{urllib.parse.urlencode(auth_params)}"
+        
+        # Redirigir al usuario a la página de autorización de BCI
+        return redirect(auth_url)
+    except Exception as e:
+        logging.error(f"Error en bci_auth: {e}")
+        flash("Error al iniciar la autorización con BCI")
+        return redirect(url_for("index"))
+
+@app.route("/bci/callback")
+@login_required
+def bci_callback():
+    """Maneja la respuesta de autorización de BCI"""
+    try:
+        # Obtener el código de autorización
+        auth_code = request.args.get('code')
+        if not auth_code:
+            error = request.args.get('error')
+            error_description = request.args.get('error_description')
+            flash(f"Error en la autorización de BCI: {error} - {error_description}")
+            return redirect(url_for("index"))
+        
+        # Intercambiar el código por un token de acceso
+        token_url = "https://apiprogram.bci.cl/sandbox/v1/api-oauth/token"
+        token_data = {
+            "grant_type": "authorization_code",
+            "code": auth_code,
+            "redirect_uri": "https://sancristobalspa.eu.pythonanywhere.com/bci/callback",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "client_secret": os.getenv('BCI_CLIENT_SECRET')
+        }
+        
+        # Hacer la solicitud para obtener el token
+        response = requests.post(token_url, data=token_data)
+        if response.status_code != 200:
+            flash("Error al obtener el token de acceso de BCI")
+            return redirect(url_for("index"))
+        
+        # Guardar el token en la sesión
+        token_data = response.json()
+        session['bci_access_token'] = token_data.get('access_token')
+        session['bci_refresh_token'] = token_data.get('refresh_token')
+        session['bci_token_expires_in'] = token_data.get('expires_in')
+        
+        flash("Autorización con BCI completada exitosamente")
+        return redirect(url_for("index"))
+        
+    except Exception as e:
+        logging.error(f"Error en bci_callback: {e}")
+        flash("Error al procesar la respuesta de BCI")
+        return redirect(url_for("index"))
+
+@app.route("/bci/accounts")
+@login_required
+def bci_accounts():
+    """Obtiene las cuentas del usuario desde BCI"""
+    try:
+        access_token = session.get('bci_access_token')
+        if not access_token:
+            flash("No hay token de acceso de BCI. Por favor, autoriza primero.")
+            return redirect(url_for("bci_auth"))
+        
+        # Hacer la solicitud a la API de BCI
+        accounts_url = "https://apiprogram.bci.cl/sandbox/v1/api-accounts/accounts"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(accounts_url, headers=headers)
+        if response.status_code != 200:
+            flash("Error al obtener las cuentas de BCI")
+            return redirect(url_for("index"))
+        
+        accounts = response.json()
+        return render_template("bci_accounts.html", accounts=accounts, active_page="bci")
+        
+    except Exception as e:
+        logging.error(f"Error en bci_accounts: {e}")
+        flash("Error al obtener las cuentas de BCI")
+        return redirect(url_for("index"))
+
+# Registro de blueprints
+app.register_blueprint(transferencias_bp, url_prefix="/transferencias")
+app.register_blueprint(pedidos_bp, url_prefix="/pedidos")
+app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
+app.register_blueprint(admin_bp, url_prefix="/admin")
+app.register_blueprint(grafico_bp, url_prefix="/grafico")
+
+def get_current_datetime():
+    """Helper function to get current datetime in local timezone"""
+    return datetime.now(local_tz)
+
+def format_datetime_with_timezone(dt):
+    """Helper function to format datetime with timezone"""
+    if dt is None:
+        return ""
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
+    if dt.tzinfo is None:
+        dt = local_tz.localize(dt)
+    return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+# Agregar filtro para formatear moneda
 @app.template_filter('format_currency')
 def format_currency(value):
-    """Formatea un valor como moneda"""
     if value is None:
-        return "0"
-    return f"${value:,.0f}"
+        return ""
+    try:
+        return f"${float(value):,.2f}"
+    except (ValueError, TypeError):
+        return str(value)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
