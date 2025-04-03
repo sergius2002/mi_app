@@ -58,7 +58,7 @@ def auth():
         
         # Construir la URL de autorización
         auth_url = (
-            f"{os.getenv('BCI_API_BASE_URL')}/authorize"
+            f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/authorize"
             f"?response_type=code"
             f"&client_id={os.getenv('BCI_CLIENT_ID')}"
             f"&redirect_uri={quote(os.getenv('BCI_REDIRECT_URI'))}"
