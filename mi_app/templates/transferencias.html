@@ -24,16 +24,16 @@
               </select>
             </div>
             <div class="mb-3">
-              <label class="form-label">Empresas</label>
-              <div>
+              <label for="empresa" class="form-label">Empresas</label>
+              <small class="text-muted d-block mb-2">Haz clic en cada empresa que desees seleccionar. Puedes seleccionar hasta 5 empresas.</small>
+              <select name="empresa" id="empresa" class="form-select select-custom" multiple data-placeholder="Seleccione una o más empresas">
+                <option value="">Todas</option>
                 {% for emp in empresas %}
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="checkbox" name="empresa" id="empresa_{{ loop.index }}" value="{{ emp }}"
-                      {% if emp in request.args.getlist('empresa') %}checked{% endif %}>
-                    <label class="form-check-label" for="empresa_{{ loop.index }}">{{ emp }}</label>
-                  </div>
+                  {% if emp != "Todas" %}
+                    <option value="{{ emp }}" {% if emp in request.args.getlist('empresa') %}selected{% endif %}>{{ emp }}</option>
+                  {% endif %}
                 {% endfor %}
-              </div>
+              </select>
             </div>
             <div class="mb-3">
               <label for="rut" class="form-label">Rut</label>
@@ -167,6 +167,51 @@ $(document).ready(function(){
     allowClear: true,
     minimumResultsForSearch: 0
   });
+
+  // Inicializar Select2 para el filtro de Empresas
+  $('#empresa').select2({
+    width: '100%',
+    placeholder: 'Seleccione una o más empresas',
+    allowClear: true,
+    closeOnSelect: false,
+    multiple: true,
+    maximumSelectionLength: 5,
+    language: {
+      maximumSelected: function (e) {
+        return 'Máximo 5 empresas seleccionadas';
+      },
+      noResults: function() {
+        return "No se encontraron empresas";
+      }
+    },
+    templateResult: function(data) {
+      if (!data.id) return data.text; // Opción "Todas"
+      return $('<span><i class="fas fa-building me-2"></i>' + data.text + '</span>');
+    }
+  });
+
+  // Manejo de la opción "Todas"
+  $('#empresa').on('select2:select', function(e) {
+    if (e.params.data.id === '') {
+      // Si se selecciona "Todas", deseleccionar las demás
+      $(this).val('').trigger('change');
+    } else {
+      // Si se selecciona una empresa específica, deseleccionar "Todas"
+      var values = $(this).val();
+      if (values && values.includes('')) {
+        values = values.filter(function(value) { return value !== ''; });
+        $(this).val(values).trigger('change');
+      }
+    }
+  });
+
+  // Agregar tooltip para mostrar instrucciones
+  $('#empresa').tooltip({
+    title: 'Haz clic en cada empresa que desees seleccionar',
+    placement: 'top',
+    trigger: 'focus'
+  });
+
   // Manejo de los formularios para actualizar (Ajax)
   $("form.update-form").submit(function(event){
     event.preventDefault();

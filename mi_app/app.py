@@ -498,10 +498,51 @@ transferencias_bp = Blueprint("transferencias", __name__)
 @login_required
 def index():
     try:
-        # Obtener datos de transferencias ordenados por fecha_detec descendente
-        response_transfers = supabase.table("transferencias").select(
-            "id, cliente, empresa, rut, monto, fecha, fecha_detec, verificada"
-        ).order("fecha_detec", desc=True).execute()
+        # Iniciar la consulta base
+        query = supabase.table("transferencias").select(
+            "id, cliente, empresa, rut, monto, fecha, fecha_detec, verificada, manual"
+        )
+
+        # Aplicar filtros
+        cliente = request.args.get("cliente")
+        if cliente:
+            query = query.eq("cliente", cliente)
+
+        rut = request.args.get("rut")
+        if rut:
+            query = query.ilike("rut", f"%{rut}%")
+
+        monto = request.args.get("monto", "").replace(".", "").strip()
+        if monto:
+            try:
+                query = query.eq("monto", int(monto))
+            except ValueError:
+                logging.warning("Valor de monto no válido: %s", monto)
+
+        verificada = request.args.get("verificada")
+        if verificada == "true":
+            query = query.eq("verificada", True)
+        elif verificada == "false":
+            query = query.eq("verificada", False)
+
+        empresas = request.args.getlist("empresa")
+        if empresas:
+            query = query.in_("empresa", empresas)
+
+        # Aplicar ordenamiento
+        sort_fields = []
+        for i in range(1, 4):  # Para sort1, sort2, sort3
+            sort = request.args.get(f"sort{i}")
+            order = request.args.get(f"order{i}", "asc")
+            if sort:
+                query = query.order(sort, desc=(order == "desc"))
+
+        # Si no hay ordenamiento específico, ordenar por fecha_detec descendente
+        if not any(request.args.get(f"sort{i}") for i in range(1, 4)):
+            query = query.order("fecha_detec", desc=True)
+
+        # Ejecutar la consulta
+        response_transfers = query.execute()
 
         transfers_data = []
         if response_transfers.data:
@@ -515,18 +556,19 @@ def index():
                     'monto': float(transfer.get('monto', 0)),
                     'fecha': transfer.get('fecha') if transfer.get('fecha') is not None else '',
                     'fecha_detec': transfer.get('fecha_detec') if transfer.get('fecha_detec') is not None else '',
-                    'verificada': bool(transfer.get('verificada', False))
+                    'verificada': bool(transfer.get('verificada', False)),
+                    'manual': bool(transfer.get('manual', False))
                 }
                 transfers_data.append(transfer_processed)
 
-            # Obtener lista única de clientes y empresas de las transferencias
-            clientes = sorted(set(t['cliente'] for t in transfers_data if t['cliente']))
-            empresas = sorted(set(t['empresa'] for t in transfers_data if t['empresa']))
-
-            # Log para debug
-            logging.info(f"Número de transferencias obtenidas: {len(transfers_data)}")
-            if transfers_data:
-                logging.info(f"Primera transferencia como ejemplo: {transfers_data[0]}")
+        # Obtener lista única de clientes y empresas
+        response_pagadores = supabase.table("pagadores").select("cliente").execute()
+        clientes = sorted(set(p["cliente"] for p in response_pagadores.data)) if response_pagadores.data else []
+        
+        # Obtener lista única de empresas de la tabla transferencias
+        response_empresas = supabase.table("transferencias").select("empresa").execute()
+        empresas = sorted(set(e["empresa"] for e in response_empresas.data if e["empresa"] is not None)) if response_empresas.data else []
+        empresas = ["Todas"] + empresas  # Agregar opción "Todas" al inicio
 
         return render_template(
             "transferencias.html",
