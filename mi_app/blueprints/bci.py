@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, session, flash
+from flask import Blueprint, render_template, redirect, url_for, request, session, flash, jsonify
 import requests
 import urllib.parse
 import os
@@ -6,6 +6,8 @@ import logging
 from functools import wraps
 import json
 from datetime import datetime, timedelta
+import uuid
+from urllib.parse import quote
 
 # Configurar logging
 logging.basicConfig(
@@ -29,70 +31,54 @@ def bci_required(f):
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
-        logger.info("Iniciando proceso de autorización BCI")
-        
-        # Verificar que las variables de entorno estén configuradas
-        required_env_vars = ['BCI_CLIENT_ID', 'BCI_CLIENT_SECRET', 'BCI_REDIRECT_URI', 'BCI_API_BASE_URL']
-        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-        
+        # Verificar que las variables de entorno necesarias estén configuradas
+        required_vars = ["BCI_CLIENT_ID", "BCI_CLIENT_SECRET", "BCI_REDIRECT_URI", "BCI_API_BASE_URL"]
+        missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
-            error_msg = f"Variables de entorno faltantes: {', '.join(missing_vars)}"
-            logger.error(error_msg)
-            flash('Error de configuración: ' + error_msg, 'error')
-            return redirect(url_for('index'))
-            
-        logger.info("Variables de entorno verificadas correctamente")
-        
-        # Crear el objeto request con el formato exacto que espera BCI
+            logging.error(f"Variables de entorno faltantes: {', '.join(missing_vars)}")
+            return jsonify({"error": f"Faltan variables de entorno: {', '.join(missing_vars)}"}), 500
+
+        # Crear el objeto request
         request_obj = {
-            "client_id": os.getenv('BCI_CLIENT_ID'),
-            "redirect_uri": os.getenv('BCI_REDIRECT_URI'),
-            "response_type": "code",
-            "scope": "customers accounts transactions payments",
-            "state": "bci_auth",
-            "nonce": "bci_nonce"
+            "openbanking_intent_id": {
+                "value": f"urn:openbank:intent:customers:{str(uuid.uuid4())}",
+                "essential": True
+            },
+            "acr": {
+                "essential": True,
+                "values": ["urn:openbank:cds:2.0"]
+            }
         }
+
+        # Convertir a JSON sin espacios y con codificación UTF-8
+        request_json = json.dumps(request_obj, separators=(',', ':'))
         
-        logger.info(f"Objeto request creado: {request_obj}")
+        # Codificar para URL
+        request_encoded = quote(request_json)
         
-        # Convertir el objeto request a JSON sin espacios y con codificación UTF-8
-        request_json = json.dumps(request_obj, separators=(',', ':'), ensure_ascii=False)
-        logger.info(f"JSON generado: {request_json}")
-        
-        # Codificar el JSON para la URL
-        encoded_request = urllib.parse.quote(request_json, safe='')
-        logger.info(f"JSON codificado: {encoded_request}")
-        
-        # Construir la URL base
-        base_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/authorize"
-        logger.info(f"URL base: {base_url}")
-        
-        # Construir la URL con todos los parámetros
+        # Construir la URL de autorización
         auth_url = (
-            f"{base_url}?"
-            f"response_type=code&"
-            f"client_id={os.getenv('BCI_CLIENT_ID')}&"
-            f"redirect_uri={urllib.parse.quote(os.getenv('BCI_REDIRECT_URI'))}&"
-            f"scope=customers+accounts+transactions+payments&"
-            f"state=bci_auth&"
-            f"nonce=bci_nonce&"
-            f"request={encoded_request}"
+            f"{os.getenv('BCI_API_BASE_URL')}/authorize"
+            f"?response_type=code"
+            f"&client_id={os.getenv('BCI_CLIENT_ID')}"
+            f"&redirect_uri={quote(os.getenv('BCI_REDIRECT_URI'))}"
+            f"&scope=customers+accounts+transactions+payments"
+            f"&state=bci_auth"
+            f"&nonce=bci_nonce"
+            f"&request={request_encoded}"
         )
+
+        logging.info(f"URL de autorización generada: {auth_url}")
         
-        logger.info(f"URL de autorización completa: {auth_url}")
-        
-        # Verificar que la URL contiene el parámetro request
+        # Verificar que el parámetro request esté presente
         if "request=" not in auth_url:
-            logger.error("El parámetro request no está presente en la URL")
-            flash('Error al construir la URL de autorización', 'error')
-            return redirect(url_for('index'))
-        
-        logger.info("Redirigiendo a la URL de autorización")
+            logging.error("El parámetro request no está presente en la URL")
+            return jsonify({"error": "Error al generar la URL de autorización"}), 500
+
         return redirect(auth_url)
     except Exception as e:
-        logger.error(f"Error en bci_auth: {str(e)}", exc_info=True)
-        flash('Error al iniciar la autorización con BCI', 'error')
-        return redirect(url_for('index'))
+        logging.error(f"Error en auth: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 @bci_bp.route('/callback')
 def callback():
