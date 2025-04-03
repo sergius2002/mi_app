@@ -21,6 +21,16 @@ def bci_required(f):
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
+        # Crear el objeto request
+        request_obj = {
+            'client_id': os.getenv('BCI_CLIENT_ID'),
+            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
+            'response_type': 'code',
+            'scope': 'customers accounts transactions payments',
+            'state': 'bci_auth',
+            'nonce': 'bci_nonce'
+        }
+        
         # Parámetros requeridos para la autorización
         auth_params = {
             'response_type': 'code',
@@ -29,14 +39,7 @@ def auth():
             'scope': 'customers accounts transactions payments',
             'state': 'bci_auth',
             'nonce': 'bci_nonce',
-            'request': json.dumps({
-                'client_id': os.getenv('BCI_CLIENT_ID'),
-                'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
-                'response_type': 'code',
-                'scope': 'customers accounts transactions payments',
-                'state': 'bci_auth',
-                'nonce': 'bci_nonce'
-            })
+            'request': json.dumps(request_obj, separators=(',', ':'))  # Sin espacios en el JSON
         }
         
         # Logging de los parámetros (sin información sensible)
