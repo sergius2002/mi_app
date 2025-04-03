@@ -40,18 +40,18 @@ class BCIClient:
             # Generar el JWT
             token = jwt.encode(
                 payload,
-                self.client_secret,
+                self.client_secret.encode('utf-8'),  # Asegurarse de que el secret esté en bytes
                 algorithm='HS256',
                 headers={
                     "typ": "JWT",
                     "alg": "HS256",
-                    "kid": self.client_id,
-                    "x5t": self.client_id
+                    "kid": self.client_id
                 }
             )
 
             self.logger.info("JWT generado correctamente")
             self.logger.info(f"Payload del JWT: {json.dumps(payload)}")
+            self.logger.info(f"Headers del JWT: {json.dumps({'typ': 'JWT', 'alg': 'HS256', 'kid': self.client_id})}")
             return token
         except Exception as e:
             self.logger.error(f"Error al generar JWT: {str(e)}", exc_info=True)
