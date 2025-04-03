@@ -5,6 +5,14 @@ import os
 import logging
 from functools import wraps
 import json
+from datetime import datetime, timedelta
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('bci_blueprint')
 
 bci_bp = Blueprint('bci', __name__, template_folder='../templates')
 
@@ -21,16 +29,20 @@ def bci_required(f):
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
+        logger.info("Iniciando proceso de autorización BCI")
+        
         # Verificar que las variables de entorno estén configuradas
         required_env_vars = ['BCI_CLIENT_ID', 'BCI_CLIENT_SECRET', 'BCI_REDIRECT_URI', 'BCI_API_BASE_URL']
         missing_vars = [var for var in required_env_vars if not os.getenv(var)]
         
         if missing_vars:
             error_msg = f"Variables de entorno faltantes: {', '.join(missing_vars)}"
-            logging.error(error_msg)
+            logger.error(error_msg)
             flash('Error de configuración: ' + error_msg, 'error')
             return redirect(url_for('index'))
             
+        logger.info("Variables de entorno verificadas correctamente")
+        
         # Crear el objeto request con el formato exacto que espera BCI
         request_obj = {
             "client_id": os.getenv('BCI_CLIENT_ID'),
@@ -41,11 +53,19 @@ def auth():
             "nonce": "bci_nonce"
         }
         
-        # Convertir el objeto request a JSON
+        logger.info(f"Objeto request creado: {request_obj}")
+        
+        # Convertir el objeto request a JSON sin espacios y con codificación UTF-8
         request_json = json.dumps(request_obj, separators=(',', ':'), ensure_ascii=False)
+        logger.info(f"JSON generado: {request_json}")
+        
+        # Codificar el JSON para la URL
+        encoded_request = urllib.parse.quote(request_json, safe='')
+        logger.info(f"JSON codificado: {encoded_request}")
         
         # Construir la URL base
         base_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/authorize"
+        logger.info(f"URL base: {base_url}")
         
         # Construir la URL con todos los parámetros
         auth_url = (
@@ -56,22 +76,21 @@ def auth():
             f"scope=customers+accounts+transactions+payments&"
             f"state=bci_auth&"
             f"nonce=bci_nonce&"
-            f"request={urllib.parse.quote(request_json)}"
+            f"request={encoded_request}"
         )
         
-        # Logging para depuración
-        logging.info(f"Request JSON: {request_json}")
-        logging.info(f"URL de autorización: {auth_url}")
+        logger.info(f"URL de autorización completa: {auth_url}")
         
         # Verificar que la URL contiene el parámetro request
         if "request=" not in auth_url:
-            logging.error("El parámetro request no está presente en la URL")
+            logger.error("El parámetro request no está presente en la URL")
             flash('Error al construir la URL de autorización', 'error')
             return redirect(url_for('index'))
         
+        logger.info("Redirigiendo a la URL de autorización")
         return redirect(auth_url)
     except Exception as e:
-        logging.error(f"Error en bci_auth: {str(e)}")
+        logger.error(f"Error en bci_auth: {str(e)}", exc_info=True)
         flash('Error al iniciar la autorización con BCI', 'error')
         return redirect(url_for('index'))
 
