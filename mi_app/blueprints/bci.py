@@ -63,6 +63,12 @@ def auth():
         logging.info(f"Request JSON: {request_json}")
         logging.info(f"URL de autorización: {auth_url}")
         
+        # Verificar que la URL contiene el parámetro request
+        if "request=" not in auth_url:
+            logging.error("El parámetro request no está presente en la URL")
+            flash('Error al construir la URL de autorización', 'error')
+            return redirect(url_for('index'))
+        
         return redirect(auth_url)
     except Exception as e:
         logging.error(f"Error en bci_auth: {str(e)}")
