@@ -21,32 +21,32 @@ def bci_required(f):
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
-        # Crear el objeto request
+        # Crear el objeto request con el formato exacto que espera BCI
         request_obj = {
-            'client_id': os.getenv('BCI_CLIENT_ID'),
-            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
-            'response_type': 'code',
-            'scope': 'customers accounts transactions payments',
-            'state': 'bci_auth',
-            'nonce': 'bci_nonce'
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "redirect_uri": os.getenv('BCI_REDIRECT_URI'),
+            "response_type": "code",
+            "scope": "customers accounts transactions payments",
+            "state": "bci_auth",
+            "nonce": "bci_nonce"
         }
         
         # Parámetros requeridos para la autorización
         auth_params = {
-            'response_type': 'code',
-            'client_id': os.getenv('BCI_CLIENT_ID'),
-            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
-            'scope': 'customers accounts transactions payments',
-            'state': 'bci_auth',
-            'nonce': 'bci_nonce',
-            'request': json.dumps(request_obj, separators=(',', ':'))  # Sin espacios en el JSON
+            "response_type": "code",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "redirect_uri": os.getenv('BCI_REDIRECT_URI'),
+            "scope": "customers accounts transactions payments",
+            "state": "bci_auth",
+            "nonce": "bci_nonce",
+            "request": json.dumps(request_obj, separators=(',', ':'), ensure_ascii=False)
         }
         
         # Logging de los parámetros (sin información sensible)
         logging.info(f"Parámetros de autorización: {auth_params}")
         
         # Construir URL de autorización
-        auth_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/authorize?{urllib.parse.urlencode(auth_params)}"
+        auth_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/authorize?{urllib.parse.urlencode(auth_params, quote_via=urllib.parse.quote)}"
         logging.info(f"URL de autorización: {auth_url}")
         
         return redirect(auth_url)
