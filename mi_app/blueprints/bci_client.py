@@ -45,13 +45,20 @@ class BCIClient:
                 headers={
                     "typ": "JWT",
                     "alg": "HS256",
-                    "kid": self.client_id
+                    "kid": self.client_id,
+                    "x5t": self.client_id
                 }
             )
 
+            # Decodificar el JWT para verificar su contenido
+            decoded = jwt.decode(token, self.client_secret.encode('utf-8'), algorithms=['HS256'])
+            
             self.logger.info("JWT generado correctamente")
             self.logger.info(f"Payload del JWT: {json.dumps(payload)}")
-            self.logger.info(f"Headers del JWT: {json.dumps({'typ': 'JWT', 'alg': 'HS256', 'kid': self.client_id})}")
+            self.logger.info(f"Headers del JWT: {json.dumps({'typ': 'JWT', 'alg': 'HS256', 'kid': self.client_id, 'x5t': self.client_id})}")
+            self.logger.info(f"JWT decodificado: {json.dumps(decoded)}")
+            self.logger.info(f"JWT completo: {token}")
+            
             return token
         except Exception as e:
             self.logger.error(f"Error al generar JWT: {str(e)}", exc_info=True)
@@ -75,6 +82,8 @@ class BCIClient:
                 "scope": "customers accounts transactions payments"
             }
 
+            self.logger.info(f"Datos de la solicitud: {json.dumps(data)}")
+
             # Hacer la solicitud
             response = requests.post(
                 f"{self.api_base_url}/v1/api-oauth/token",
@@ -84,6 +93,8 @@ class BCIClient:
                     "Accept": "application/json"
                 }
             )
+
+            self.logger.info(f"Respuesta de la API: {response.status_code} - {response.text}")
 
             # Verificar la respuesta
             if response.status_code == 200:
