@@ -21,6 +21,16 @@ def bci_required(f):
 def auth():
     """Inicia el proceso de autorización con BCI"""
     try:
+        # Verificar que las variables de entorno estén configuradas
+        required_env_vars = ['BCI_CLIENT_ID', 'BCI_CLIENT_SECRET', 'BCI_REDIRECT_URI', 'BCI_API_BASE_URL']
+        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+        
+        if missing_vars:
+            error_msg = f"Variables de entorno faltantes: {', '.join(missing_vars)}"
+            logging.error(error_msg)
+            flash('Error de configuración: ' + error_msg, 'error')
+            return redirect(url_for('index'))
+            
         # Crear el objeto request con el formato exacto que espera BCI
         request_obj = {
             "client_id": os.getenv('BCI_CLIENT_ID'),
