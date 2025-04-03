@@ -45,8 +45,7 @@ class BCIClient:
                 headers={
                     "typ": "JWT",
                     "alg": "HS256",
-                    "kid": self.client_id,
-                    "x5t": self.client_id
+                    "kid": self.client_id
                 }
             )
 
@@ -55,7 +54,7 @@ class BCIClient:
             
             self.logger.info("JWT generado correctamente")
             self.logger.info(f"Payload del JWT: {json.dumps(payload)}")
-            self.logger.info(f"Headers del JWT: {json.dumps({'typ': 'JWT', 'alg': 'HS256', 'kid': self.client_id, 'x5t': self.client_id})}")
+            self.logger.info(f"Headers del JWT: {json.dumps({'typ': 'JWT', 'alg': 'HS256', 'kid': self.client_id})}")
             self.logger.info(f"JWT decodificado: {json.dumps(decoded)}")
             self.logger.info(f"JWT completo: {token}")
             
