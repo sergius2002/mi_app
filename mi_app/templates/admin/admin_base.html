@@ -19,10 +19,13 @@
           <i class="fas fa-calendar-check"></i> Realizar Cierre de Día
         </a>
         <a href="{{ url_for('admin.tasa_compras') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.tasa_compras' %}active{% endif %}">
-          <i class="fas fa-shopping-cart"></i> Tasa de Compras
+          <i class="fas fa-shopping-cart"></i> Compras BRS
         </a>
         <a href="{{ url_for('admin.ingresar_usdt') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.ingresar_usdt' %}active{% endif %}">
-          <i class="fas fa-dollar-sign"></i> Ingresar Compra USDT
+          <i class="fas fa-dollar-sign"></i> Ingresar Transaccion
+        </a>
+        <a href="{{ url_for('admin.resumen_compras_usdt') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.resumen_compras_usdt' %}active{% endif %}">
+          <i class="fas fa-list"></i> Compras USDT
         </a>
         <a href="{{ url_for('admin.tasa_actual') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.tasa_actual' %}active{% endif %}">
           <i class="fas fa-chart-line"></i> Tasa actual
