@@ -64,44 +64,37 @@ def auth():
         request_json = json.dumps(request_obj)
         logger.info(f"JSON generado: {request_json}")
         
-        request_encoded = quote(request_json)
-        logger.info(f"JSON codificado: {request_encoded}")
+        # Generar la URL de autorización
+        auth_url = f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/authorize"
+        params = {
+            "response_type": "code",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "redirect_uri": os.getenv('BCI_REDIRECT_URI'),
+            "scope": "customers accounts transactions payments",
+            "state": "bci_auth",
+            "nonce": "bci_nonce",
+            "request": request_json
+        }
         
-        # Generar URL de autorización
-        auth_url = (
-            f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/authorize"
-            f"?response_type=code"
-            f"&client_id={os.getenv('BCI_CLIENT_ID')}"
-            f"&redirect_uri={quote(os.getenv('BCI_REDIRECT_URI'))}"
-            f"&scope=customers+accounts+transactions+payments"
-            f"&state=bci_auth"
-            f"&nonce=bci_nonce"
-            f"&request={request_encoded}"
-        )
+        # Codificar los parámetros manualmente para asegurar el formato correcto
+        encoded_params = []
+        for key, value in params.items():
+            if key == "request":
+                # Para el parámetro request, usar quote_plus para codificar espacios como +
+                encoded_value = urllib.parse.quote_plus(value)
+            else:
+                encoded_value = urllib.parse.quote(value)
+            encoded_params.append(f"{key}={encoded_value}")
         
-        logger.info(f"URL de autorización generada: {auth_url}")
+        auth_url = f"{auth_url}?{'&'.join(encoded_params)}"
         
-        # Verificar que la URL contiene el parámetro request
-        if 'request=' not in auth_url:
-            error_msg = "La URL de autorización no contiene el parámetro request"
-            logger.error(error_msg)
-            return jsonify({'error': error_msg}), 500
+        # Verificar que la URL sea válida
+        parsed_url = urllib.parse.urlparse(auth_url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            logging.error("URL de autorización inválida")
+            return jsonify({"error": "URL de autorización inválida"}), 500
             
-        # Asegurarse de que la URL esté correctamente codificada
-        auth_url = auth_url.replace(' ', '+')
-        logger.info(f"URL de autorización final: {auth_url}")
-            
-        # Verificar que la URL es válida
-        try:
-            parsed_url = urlparse(auth_url)
-            if not parsed_url.scheme or not parsed_url.netloc:
-                error_msg = "URL de autorización inválida"
-                logger.error(error_msg)
-                return jsonify({'error': error_msg}), 500
-        except Exception as e:
-            error_msg = f"Error al validar la URL: {str(e)}"
-            logger.error(error_msg)
-            return jsonify({'error': error_msg}), 500
+        logging.info(f"URL de autorización final: {auth_url}")
             
         return redirect(auth_url)
         
