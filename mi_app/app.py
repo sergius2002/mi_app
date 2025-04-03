@@ -46,7 +46,11 @@ plt.ioff()
 
 from blueprints.utilidades import utilidades_bp
 from blueprints.margen import margen_bp
-from blueprints.bci import bci_bp
+from mi_app.blueprints.bci import bci_bp
+from mi_app.blueprints.transferencias import transferencias_bp
+from mi_app.blueprints.pedidos import pedidos_bp
+from mi_app.blueprints.admin import admin_bp
+from mi_app.blueprints.dashboard import dashboard_bp
 
 # -----------------------------------------------------------------------------
 # Configuración de logging
@@ -69,7 +73,11 @@ cache = Cache(app, config={
 # -----------------------------------------------------------------------------
 app.register_blueprint(utilidades_bp)
 app.register_blueprint(margen_bp)
-app.register_blueprint(bci_bp)
+app.register_blueprint(bci_bp, url_prefix='/bci')
+app.register_blueprint(transferencias_bp, url_prefix='/transferencias')
+app.register_blueprint(pedidos_bp, url_prefix='/pedidos')
+app.register_blueprint(admin_bp, url_prefix='/admin')
+app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
 # -----------------------------------------------------------------------------
 # Decorador login_required
