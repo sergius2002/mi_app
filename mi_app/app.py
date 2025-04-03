@@ -3,6 +3,9 @@ import time
 from dotenv import load_dotenv
 import ssl
 import shutil
+import requests
+import json
+import urllib.parse
 
 # Cargar variables de entorno
 load_dotenv()
@@ -10,6 +13,8 @@ load_dotenv()
 # Debug prints
 print("SUPABASE_URL:", os.getenv('SUPABASE_URL'))
 print("SUPABASE_KEY:", os.getenv('SUPABASE_KEY'))
+print("BCI_CLIENT_ID:", os.getenv('BCI_CLIENT_ID'))
+print("BCI_CLIENT_SECRET:", os.getenv('BCI_CLIENT_SECRET'))
 
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
@@ -41,6 +46,7 @@ plt.ioff()
 
 from blueprints.utilidades import utilidades_bp
 from blueprints.margen import margen_bp
+from blueprints.bci import bci_bp
 
 # -----------------------------------------------------------------------------
 # Configuración de logging
@@ -1209,6 +1215,105 @@ def update_transfer(transfer_id):
         return jsonify(success=True)
     return redirect(request.referrer or url_for("transferencias.index"))
 
+# Rutas para BCI
+@app.route("/bci/auth")
+@login_required
+def bci_auth():
+    """Inicia el proceso de autorización con BCI"""
+    try:
+        # Parámetros para la solicitud de autorización
+        auth_params = {
+            "response_type": "code",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "redirect_uri": "https://sancristobalspa.eu.pythonanywhere.com/bci/callback",
+            "scope": "customers accounts transactions payments",
+            "state": "bci_auth",  # Puedes generar un estado único si lo necesitas
+            "nonce": "bci_nonce"  # Puedes generar un nonce único si lo necesitas
+        }
+        
+        # Construir la URL de autorización
+        auth_url = f"https://apiprogram.bci.cl/sandbox/v1/api-oauth/authorize?{urllib.parse.urlencode(auth_params)}"
+        
+        # Redirigir al usuario a la página de autorización de BCI
+        return redirect(auth_url)
+    except Exception as e:
+        logging.error(f"Error en bci_auth: {e}")
+        flash("Error al iniciar la autorización con BCI")
+        return redirect(url_for("index"))
+
+@app.route("/bci/callback")
+@login_required
+def bci_callback():
+    """Maneja la respuesta de autorización de BCI"""
+    try:
+        # Obtener el código de autorización
+        auth_code = request.args.get('code')
+        if not auth_code:
+            error = request.args.get('error')
+            error_description = request.args.get('error_description')
+            flash(f"Error en la autorización de BCI: {error} - {error_description}")
+            return redirect(url_for("index"))
+        
+        # Intercambiar el código por un token de acceso
+        token_url = "https://apiprogram.bci.cl/sandbox/v1/api-oauth/token"
+        token_data = {
+            "grant_type": "authorization_code",
+            "code": auth_code,
+            "redirect_uri": "https://sancristobalspa.eu.pythonanywhere.com/bci/callback",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "client_secret": os.getenv('BCI_CLIENT_SECRET')
+        }
+        
+        # Hacer la solicitud para obtener el token
+        response = requests.post(token_url, data=token_data)
+        if response.status_code != 200:
+            flash("Error al obtener el token de acceso de BCI")
+            return redirect(url_for("index"))
+        
+        # Guardar el token en la sesión
+        token_data = response.json()
+        session['bci_access_token'] = token_data.get('access_token')
+        session['bci_refresh_token'] = token_data.get('refresh_token')
+        session['bci_token_expires_in'] = token_data.get('expires_in')
+        
+        flash("Autorización con BCI completada exitosamente")
+        return redirect(url_for("index"))
+        
+    except Exception as e:
+        logging.error(f"Error en bci_callback: {e}")
+        flash("Error al procesar la respuesta de BCI")
+        return redirect(url_for("index"))
+
+@app.route("/bci/accounts")
+@login_required
+def bci_accounts():
+    """Obtiene las cuentas del usuario desde BCI"""
+    try:
+        access_token = session.get('bci_access_token')
+        if not access_token:
+            flash("No hay token de acceso de BCI. Por favor, autoriza primero.")
+            return redirect(url_for("bci_auth"))
+        
+        # Hacer la solicitud a la API de BCI
+        accounts_url = "https://apiprogram.bci.cl/sandbox/v1/api-accounts/accounts"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(accounts_url, headers=headers)
+        if response.status_code != 200:
+            flash("Error al obtener las cuentas de BCI")
+            return redirect(url_for("index"))
+        
+        accounts = response.json()
+        return render_template("bci_accounts.html", accounts=accounts, active_page="bci")
+        
+    except Exception as e:
+        logging.error(f"Error en bci_accounts: {e}")
+        flash("Error al obtener las cuentas de BCI")
+        return redirect(url_for("index"))
+
 # Registro de blueprints
 app.register_blueprint(transferencias_bp, url_prefix="/transferencias")
 app.register_blueprint(pedidos_bp, url_prefix="/pedidos")
@@ -1217,6 +1322,7 @@ app.register_blueprint(admin_bp, url_prefix="/admin")
 app.register_blueprint(utilidades_bp, url_prefix="/utilidades")
 app.register_blueprint(margen_bp, url_prefix="/admin")
 app.register_blueprint(grafico_bp, url_prefix="/grafico")
+app.register_blueprint(bci_bp, url_prefix='/bci')
 
 def get_current_datetime():
     """Helper function to get current datetime in local timezone"""
@@ -1227,6 +1333,14 @@ def format_datetime_with_timezone(dt):
     if dt.tzinfo is None:
         dt = local_tz.localize(dt)
     return dt.astimezone(local_tz)
+
+# Agregar filtro para formatear moneda
+@app.template_filter('format_currency')
+def format_currency(value):
+    try:
+        return "${:,.2f}".format(float(value))
+    except (ValueError, TypeError):
+        return value
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Cuentas BCI</h2>
+    
+    {% if accounts %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Número de Cuenta</th>
+                        <th>Tipo de Cuenta</th>
+                        <th>Moneda</th>
+                        <th>Saldo</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in accounts %}
+                        <tr>
+                            <td>{{ account.number }}</td>
+                            <td>{{ account.type }}</td>
+                            <td>{{ account.currency }}</td>
+                            <td>{{ account.balance|format_monto }}</td>
+                            <td>{{ account.status }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            No se encontraron cuentas asociadas.
+        </div>
+    {% endif %}
+    
+    <div class="mt-3">
+        <a href="{{ url_for('bci_auth') }}" class="btn btn-primary">
+            <i class="fas fa-sync-alt"></i> Actualizar Datos
+        </a>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+{% endblock %} 

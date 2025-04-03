@@ -85,6 +85,11 @@
             <i class="fas fa-chart-line"></i> Gráficos
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {% if active_page == 'bci' %}active{% endif %}" href="{{ url_for('bci.auth') }}">
+            <i class="fas fa-university"></i> BCI
+          </a>
+        </li>
       </ul>
       <ul class="navbar-nav ms-auto">
         <li class="nav-item">
