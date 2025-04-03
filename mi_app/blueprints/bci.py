@@ -29,23 +29,24 @@ def bci_required(f):
 
 @bci_bp.route("/auth")
 def auth():
-    """Inicia el proceso de autorización con BCI"""
+    """Inicia el proceso de autorización OAuth con BCI"""
     try:
-        logging.info("Iniciando proceso de autorización BCI")
+        logger.info("Iniciando proceso de autorización BCI")
         
-        # Verificar que las variables de entorno necesarias estén configuradas
-        required_vars = ["BCI_CLIENT_ID", "BCI_CLIENT_SECRET", "BCI_REDIRECT_URI", "BCI_API_BASE_URL"]
+        # Verificar variables de entorno
+        required_vars = ['BCI_API_BASE_URL', 'BCI_CLIENT_ID', 'BCI_REDIRECT_URI']
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
-            logging.error(f"Variables de entorno faltantes: {', '.join(missing_vars)}")
-            return jsonify({"error": f"Faltan variables de entorno: {', '.join(missing_vars)}"}), 500
+            error_msg = f"Faltan variables de entorno requeridas: {', '.join(missing_vars)}"
+            logger.error(error_msg)
+            return jsonify({'error': error_msg}), 500
+            
+        logger.info("Variables de entorno verificadas correctamente")
+        logger.info(f"BCI_API_BASE_URL: {os.getenv('BCI_API_BASE_URL')}")
+        logger.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
+        logger.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
 
-        logging.info("Variables de entorno verificadas correctamente")
-        logging.info(f"BCI_API_BASE_URL: {os.getenv('BCI_API_BASE_URL')}")
-        logging.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
-        logging.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
-
-        # Crear el objeto request
+        # Crear objeto request
         request_obj = {
             "openbanking_intent_id": {
                 "value": f"urn:openbank:intent:customers:{str(uuid.uuid4())}",
@@ -56,18 +57,17 @@ def auth():
                 "values": ["urn:openbank:cds:2.0"]
             }
         }
-
-        logging.info(f"Objeto request creado: {request_obj}")
-
-        # Convertir a JSON sin espacios y con codificación UTF-8
-        request_json = json.dumps(request_obj, separators=(',', ':'))
-        logging.info(f"JSON generado: {request_json}")
         
-        # Codificar para URL
+        logger.info(f"Objeto request creado: {request_obj}")
+        
+        # Convertir a JSON y codificar
+        request_json = json.dumps(request_obj)
+        logger.info(f"JSON generado: {request_json}")
+        
         request_encoded = quote(request_json)
-        logging.info(f"JSON codificado: {request_encoded}")
+        logger.info(f"JSON codificado: {request_encoded}")
         
-        # Construir la URL de autorización
+        # Generar URL de autorización
         auth_url = (
             f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/authorize"
             f"?response_type=code"
@@ -78,18 +78,24 @@ def auth():
             f"&nonce=bci_nonce"
             f"&request={request_encoded}"
         )
-
-        logging.info(f"URL de autorización generada: {auth_url}")
         
-        # Verificar que el parámetro request esté presente
-        if "request=" not in auth_url:
-            logging.error("El parámetro request no está presente en la URL")
-            return jsonify({"error": "Error al generar la URL de autorización"}), 500
-
+        logger.info(f"URL de autorización generada: {auth_url}")
+        
+        # Verificar que la URL contiene el parámetro request
+        if 'request=' not in auth_url:
+            error_msg = "La URL de autorización no contiene el parámetro request"
+            logger.error(error_msg)
+            return jsonify({'error': error_msg}), 500
+            
+        # Asegurarse de que la URL esté correctamente codificada
+        auth_url = auth_url.replace(' ', '+')
+        logger.info(f"URL de autorización final: {auth_url}")
+            
         return redirect(auth_url)
+        
     except Exception as e:
-        logging.error(f"Error en auth: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error en auth: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @bci_bp.route('/callback')
 def callback():
