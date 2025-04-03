@@ -65,6 +65,13 @@ cache = Cache(app, config={
 })
 
 # -----------------------------------------------------------------------------
+# Registro de blueprints
+# -----------------------------------------------------------------------------
+app.register_blueprint(utilidades_bp)
+app.register_blueprint(margen_bp)
+app.register_blueprint(bci_bp)
+
+# -----------------------------------------------------------------------------
 # Decorador login_required
 # -----------------------------------------------------------------------------
 def login_required(f):
@@ -1319,10 +1326,7 @@ app.register_blueprint(transferencias_bp, url_prefix="/transferencias")
 app.register_blueprint(pedidos_bp, url_prefix="/pedidos")
 app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
 app.register_blueprint(admin_bp, url_prefix="/admin")
-app.register_blueprint(utilidades_bp, url_prefix="/utilidades")
-app.register_blueprint(margen_bp, url_prefix="/admin")
 app.register_blueprint(grafico_bp, url_prefix="/grafico")
-app.register_blueprint(bci_bp, url_prefix='/bci')
 
 def get_current_datetime():
     """Helper function to get current datetime in local timezone"""
@@ -1330,17 +1334,23 @@ def get_current_datetime():
 
 def format_datetime_with_timezone(dt):
     """Helper function to format datetime with timezone"""
+    if dt is None:
+        return ""
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
     if dt.tzinfo is None:
         dt = local_tz.localize(dt)
-    return dt.astimezone(local_tz)
+    return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
 
 # Agregar filtro para formatear moneda
 @app.template_filter('format_currency')
 def format_currency(value):
+    if value is None:
+        return ""
     try:
-        return "${:,.2f}".format(float(value))
+        return f"${float(value):,.2f}"
     except (ValueError, TypeError):
-        return value
+        return str(value)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
