@@ -1226,7 +1226,7 @@ def update_transfer(transfer_id):
 @app.route('/auth')
 def auth():
     """Redirige a la página de autorización de BCI"""
-    return redirect('/bci/auth')
+    return redirect(url_for('bci.auth'))
 
 @app.route("/bci/callback")
 @login_required
