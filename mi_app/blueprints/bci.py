@@ -44,13 +44,19 @@ def generate_jwt():
             'aud': os.getenv('BCI_API_BASE_URL'),
             'exp': int(time.time()) + 300,  # 5 minutos de expiración
             'iat': int(time.time()),
-            'jti': str(uuid.uuid4())
+            'jti': str(uuid.uuid4()),
+            'scope': 'customers accounts transactions payments',
+            'response_type': 'code',
+            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
+            'state': 'bci_auth',
+            'nonce': 'bci_nonce'
         }
 
         # Crear el header del JWT
         headers = {
             'alg': 'HS256',
-            'typ': 'JWT'
+            'typ': 'JWT',
+            'kid': os.getenv('BCI_CLIENT_ID')  # Agregar el client ID como kid
         }
 
         # Generar el token JWT
@@ -62,6 +68,7 @@ def generate_jwt():
         )
 
         logger.info("Token JWT generado correctamente")
+        logger.info(f"Token JWT: {token}")
         return token
 
     except Exception as e:
@@ -139,10 +146,36 @@ def auth():
         # Hacer la solicitud con el token JWT
         headers = {
             'Authorization': f'Bearer {jwt_token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
         }
         
-        response = requests.get(auth_url, headers=headers)
+        # Primero, hacer una solicitud POST para obtener el token de acceso
+        token_url = f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/token"
+        token_data = {
+            'grant_type': 'client_credentials',
+            'client_id': os.getenv('BCI_CLIENT_ID'),
+            'client_secret': os.getenv('BCI_CLIENT_SECRET')
+        }
+        
+        logger.info("Solicitando token de acceso...")
+        token_response = requests.post(token_url, data=token_data, headers=headers)
+        
+        if token_response.status_code != 200:
+            logger.error(f"Error al obtener token de acceso: {token_response.status_code} - {token_response.text}")
+            return jsonify({'error': f"Error al obtener token de acceso: {token_response.text}"}), token_response.status_code
+        
+        access_token = token_response.json().get('access_token')
+        logger.info("Token de acceso obtenido correctamente")
+        
+        # Ahora, hacer la solicitud de autorización con el token de acceso
+        auth_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        response = requests.get(auth_url, headers=auth_headers)
         if response.status_code != 200:
             logger.error(f"Error en la solicitud de autorización: {response.status_code} - {response.text}")
             return jsonify({'error': f"Error en la solicitud de autorización: {response.text}"}), response.status_code
