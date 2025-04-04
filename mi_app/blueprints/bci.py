@@ -10,6 +10,7 @@ import uuid
 from urllib.parse import quote
 import jwt
 import time
+import base64
 
 # Configurar logging
 logging.basicConfig(
@@ -94,10 +95,6 @@ def auth():
         logger.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
         logger.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
 
-        # Generar el token JWT
-        jwt_token = generate_jwt()
-        logger.info("Token JWT generado")
-        
         # Crear objeto request
         request_obj = {
             "openbanking_intent_id": {
@@ -143,14 +140,18 @@ def auth():
         auth_url = auth_url.replace(' ', '+')
         logger.info(f"URL de autorización final: {auth_url}")
         
-        # Hacer la solicitud con el token JWT
+        # Crear credenciales Basic Auth
+        credentials = f"{os.getenv('BCI_CLIENT_ID')}:{os.getenv('BCI_CLIENT_SECRET')}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        
+        # Hacer la solicitud con Basic Auth
         headers = {
-            'Authorization': f'Bearer {jwt_token}',
+            'Authorization': f'Basic {encoded_credentials}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
         
-        logger.info("Realizando solicitud de autorización con token JWT")
+        logger.info("Realizando solicitud de autorización con Basic Auth")
         response = requests.get(auth_url, headers=headers)
         
         if response.status_code != 200:
