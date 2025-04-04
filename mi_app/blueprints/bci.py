@@ -8,6 +8,8 @@ import json
 from datetime import datetime, timedelta
 import uuid
 from urllib.parse import quote
+import jwt
+import time
 
 # Configurar logging
 logging.basicConfig(
@@ -27,6 +29,45 @@ def bci_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def generate_jwt():
+    """Genera un token JWT para la autenticación con BCI"""
+    try:
+        # Obtener el client secret
+        client_secret = os.getenv('BCI_CLIENT_SECRET')
+        if not client_secret:
+            raise ValueError("BCI_CLIENT_SECRET no está configurado")
+
+        # Crear el payload del JWT
+        payload = {
+            'iss': os.getenv('BCI_CLIENT_ID'),
+            'sub': os.getenv('BCI_CLIENT_ID'),
+            'aud': os.getenv('BCI_API_BASE_URL'),
+            'exp': int(time.time()) + 300,  # 5 minutos de expiración
+            'iat': int(time.time()),
+            'jti': str(uuid.uuid4())
+        }
+
+        # Crear el header del JWT
+        headers = {
+            'alg': 'HS256',
+            'typ': 'JWT'
+        }
+
+        # Generar el token JWT
+        token = jwt.encode(
+            payload,
+            client_secret,
+            algorithm='HS256',
+            headers=headers
+        )
+
+        logger.info("Token JWT generado correctamente")
+        return token
+
+    except Exception as e:
+        logger.error(f"Error al generar JWT: {str(e)}")
+        raise
+
 @bci_bp.route("/auth")
 def auth():
     """Inicia el proceso de autorización OAuth con BCI"""
@@ -45,6 +86,10 @@ def auth():
         logger.info(f"BCI_API_BASE_URL: {os.getenv('BCI_API_BASE_URL')}")
         logger.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
         logger.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
+
+        # Generar el token JWT
+        jwt_token = generate_jwt()
+        logger.info("Token JWT generado")
 
         # Crear objeto request
         request_obj = {
@@ -93,7 +138,7 @@ def auth():
         
         # Hacer la solicitud con el token JWT
         headers = {
-            'Authorization': f'Bearer {os.getenv("BCI_CLIENT_SECRET")}',
+            'Authorization': f'Bearer {jwt_token}',
             'Content-Type': 'application/json'
         }
         
