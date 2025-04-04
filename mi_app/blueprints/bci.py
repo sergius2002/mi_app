@@ -33,45 +33,29 @@ def bci_required(f):
 def generate_jwt():
     """Genera un token JWT para la autenticación con BCI"""
     try:
-        # Obtener el client secret
-        client_secret = os.getenv('BCI_CLIENT_SECRET')
-        if not client_secret:
-            raise ValueError("BCI_CLIENT_SECRET no está configurado")
-
         # Crear el payload del JWT
         payload = {
             'iss': os.getenv('BCI_CLIENT_ID'),
-            'sub': os.getenv('BCI_CLIENT_ID'),
-            'aud': os.getenv('BCI_API_BASE_URL'),
-            'exp': int(time.time()) + 300,  # 5 minutos de expiración
-            'iat': int(time.time()),
-            'jti': str(uuid.uuid4()),
-            'scope': 'customers accounts transactions payments',
-            'response_type': 'code',
-            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
-            'state': 'bci_auth',
-            'nonce': 'bci_nonce'
+            'credentials': os.getenv('BCI_CLIENT_SECRET')
         }
-
+        
         # Crear el header del JWT
         headers = {
             'alg': 'HS256',
-            'typ': 'JWT',
-            'kid': os.getenv('BCI_CLIENT_ID')  # Agregar el client ID como kid
+            'typ': 'JWT'
         }
-
+        
         # Generar el token JWT
         token = jwt.encode(
             payload,
-            client_secret,
+            os.getenv('BCI_CLIENT_SECRET'),
             algorithm='HS256',
             headers=headers
         )
-
+        
         logger.info("Token JWT generado correctamente")
-        logger.info(f"Token JWT: {token}")
         return token
-
+        
     except Exception as e:
         logger.error(f"Error al generar JWT: {str(e)}")
         raise
@@ -194,7 +178,7 @@ def auth():
         }
         
         logger.info("Realizando solicitud de autorización...")
-        response = requests.get(auth_url, headers=headers)
+        response = requests.post(auth_url, headers=headers)
         
         if response.status_code != 200:
             logger.error(f"Error en la solicitud de autorización: {response.status_code} - {response.text}")
@@ -248,17 +232,28 @@ def callback():
             flash(f'Error en la autorización de BCI: {error} - {error_description}', 'error')
             return redirect(url_for('index'))
         
-        token_url = f"{os.getenv('BCI_API_BASE_URL')}/api-oauth/token"
+        # Paso 4: Obtención del Authorization Token
+        token_url = f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/token"
+        
+        # Generar JWT para client_assertion
+        client_assertion = generate_jwt()
+        
         token_data = {
             'grant_type': 'authorization_code',
-            'code': auth_code,
             'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
             'client_id': os.getenv('BCI_CLIENT_ID'),
-            'client_secret': os.getenv('BCI_CLIENT_SECRET')
+            'code': auth_code,
+            'scope': 'customers',
+            'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion': client_assertion
         }
         
         logging.info("Solicitando token de acceso...")
-        response = requests.post(token_url, data=token_data)
+        response = requests.post(
+            token_url, 
+            data=token_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
         
         if response.status_code != 200:
             logging.error(f"Error al obtener token: {response.status_code} - {response.text}")
