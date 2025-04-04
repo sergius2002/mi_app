@@ -95,26 +95,83 @@ def auth():
         logger.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
         logger.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
 
-        # Crear objeto request
-        request_obj = {
-            "openbanking_intent_id": {
-                "value": f"urn:openbank:intent:customers:{str(uuid.uuid4())}",
-                "essential": True
-            },
-            "acr": {
-                "essential": True,
-                "values": ["urn:openbank:cds:2.0"]
+        # Paso 1: Obtener token de acceso
+        token_url = f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/token"
+        token_data = {
+            'grant_type': 'client_credentials',
+            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
+            'scope': 'access-requests',
+            'client_assertion': generate_jwt()  # JWT con iss y credentials
+        }
+        
+        logger.info("Solicitando token de acceso...")
+        token_response = requests.post(
+            token_url,
+            data=token_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        
+        if token_response.status_code != 200:
+            logger.error(f"Error al obtener token de acceso: {token_response.text}")
+            return jsonify({'error': f"Error al obtener token de acceso: {token_response.text}"}), token_response.status_code
+            
+        access_token = token_response.json().get('access_token')
+        logger.info("Token de acceso obtenido correctamente")
+        
+        # Paso 2: Solicitar AccessRequest
+        access_request_url = f"{os.getenv('BCI_API_BASE_URL')}/v1/api-access-requests/requests"
+        access_request_data = {
+            "Data": {
+                "TppId": os.getenv('BCI_CLIENT_ID'),
+                "Scope": "customers"
             }
         }
         
-        logger.info(f"Objeto request creado: {request_obj}")
+        logger.info("Solicitando AccessRequest...")
+        access_request_response = requests.post(
+            access_request_url,
+            json=access_request_data,
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+        )
         
-        # Convertir a JSON y codificar
-        request_json = json.dumps(request_obj)
-        logger.info(f"JSON generado: {request_json}")
+        if access_request_response.status_code != 200:
+            logger.error(f"Error al solicitar AccessRequest: {access_request_response.text}")
+            return jsonify({'error': f"Error al solicitar AccessRequest: {access_request_response.text}"}), access_request_response.status_code
+            
+        request_id = access_request_response.json()['Request']['RequestId']
+        logger.info(f"AccessRequest obtenido correctamente. RequestId: {request_id}")
         
-        request_encoded = quote(request_json)
-        logger.info(f"JSON codificado: {request_encoded}")
+        # Paso 3: Llamada a OAuth Authorize
+        state = str(uuid.uuid1())
+        nonce = str(uuid.uuid4())
+        
+        # Crear objeto request para el JWT de autorización
+        request_obj = {
+            "iss": "https://api.openbank.com",
+            "response_type": "code",
+            "client_id": os.getenv('BCI_CLIENT_ID'),
+            "redirect_uri": os.getenv('BCI_REDIRECT_URI'),
+            "scope": "customers",
+            "state": state,
+            "nonce": nonce,
+            "claims": {
+                "id_token": {
+                    "openbanking_intent_id": {
+                        "value": f"urn:openbanking:intent:customers:{request_id}",
+                        "essential": True
+                    },
+                    "acr": {
+                        "essential": True
+                    }
+                }
+            }
+        }
+        
+        # Generar JWT para autorización
+        auth_jwt = generate_auth_jwt(request_obj)
         
         # Generar URL de autorización
         auth_url = (
@@ -122,36 +179,21 @@ def auth():
             f"?response_type=code"
             f"&client_id={os.getenv('BCI_CLIENT_ID')}"
             f"&redirect_uri={quote(os.getenv('BCI_REDIRECT_URI'))}"
-            f"&scope=customers+accounts+transactions+payments"
-            f"&state=bci_auth"
-            f"&nonce=bci_nonce"
-            f"&request={request_encoded}"
+            f"&scope=customers"
+            f"&state={state}"
+            f"&nonce={nonce}"
+            f"&request={quote(auth_jwt)}"
         )
         
         logger.info(f"URL de autorización generada: {auth_url}")
         
-        # Verificar que la URL contiene el parámetro request
-        if 'request=' not in auth_url:
-            error_msg = "La URL de autorización no contiene el parámetro request"
-            logger.error(error_msg)
-            return jsonify({'error': error_msg}), 500
-            
-        # Asegurarse de que la URL esté correctamente codificada
-        auth_url = auth_url.replace(' ', '+')
-        logger.info(f"URL de autorización final: {auth_url}")
-        
-        # Crear credenciales Basic Auth
-        credentials = f"{os.getenv('BCI_CLIENT_ID')}:{os.getenv('BCI_CLIENT_SECRET')}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
-        
-        # Hacer la solicitud con Basic Auth
+        # Hacer la solicitud de autorización
         headers = {
-            'Authorization': f'Basic {encoded_credentials}',
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'x-apikey': os.getenv('BCI_CLIENT_ID')
         }
         
-        logger.info("Realizando solicitud de autorización con Basic Auth")
+        logger.info("Realizando solicitud de autorización...")
         response = requests.get(auth_url, headers=headers)
         
         if response.status_code != 200:
@@ -164,6 +206,35 @@ def auth():
     except Exception as e:
         logger.error(f"Error en auth: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+def generate_auth_jwt(payload):
+    """Genera un JWT para la autorización OAuth"""
+    try:
+        # Obtener la clave privada
+        private_key_path = os.path.join(os.path.dirname(__file__), 'bci_private_key.pem')
+        with open(private_key_path, 'r') as key_file:
+            private_key = key_file.read()
+            
+        # Crear el header del JWT
+        header = {
+            'alg': 'RS256',
+            'typ': 'JWT'
+        }
+        
+        # Generar el JWT
+        token = jwt.encode(
+            payload,
+            private_key,
+            algorithm='RS256',
+            headers=header
+        )
+        
+        logger.info("JWT de autorización generado correctamente")
+        return token
+        
+    except Exception as e:
+        logger.error(f"Error generando JWT de autorización: {str(e)}", exc_info=True)
+        raise
 
 @bci_bp.route('/callback')
 def callback():
