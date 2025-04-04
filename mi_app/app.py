@@ -1223,30 +1223,10 @@ def update_transfer(transfer_id):
     return redirect(request.referrer or url_for("transferencias.index"))
 
 # Rutas para BCI
-@app.route("/bci/auth")
-@login_required
-def bci_auth():
-    """Inicia el proceso de autorización con BCI"""
-    try:
-        # Parámetros para la solicitud de autorización
-        auth_params = {
-            "response_type": "code",
-            "client_id": os.getenv('BCI_CLIENT_ID'),
-            "redirect_uri": "https://sancristobalspa.eu.pythonanywhere.com/bci/callback",
-            "scope": "customers accounts transactions payments",
-            "state": "bci_auth",  # Puedes generar un estado único si lo necesitas
-            "nonce": "bci_nonce"  # Puedes generar un nonce único si lo necesitas
-        }
-        
-        # Construir la URL de autorización
-        auth_url = f"https://apiprogram.bci.cl/sandbox/v1/api-oauth/authorize?{urllib.parse.urlencode(auth_params)}"
-        
-        # Redirigir al usuario a la página de autorización de BCI
-        return redirect(auth_url)
-    except Exception as e:
-        logging.error(f"Error en bci_auth: {e}")
-        flash("Error al iniciar la autorización con BCI")
-        return redirect(url_for("index"))
+@app.route('/auth')
+def auth():
+    """Redirige a la página de autorización de BCI"""
+    return redirect(url_for('bci.auth'))
 
 @app.route("/bci/callback")
 @login_required
