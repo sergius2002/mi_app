@@ -52,8 +52,13 @@ def generate_jwt():
         
         # Obtener la clave privada
         private_key_path = os.path.join(os.path.dirname(__file__), 'bci_private_key.pem')
-        with open(private_key_path, 'r') as key_file:
-            private_key = key_file.read()
+        try:
+            with open(private_key_path, 'r') as key_file:
+                private_key = key_file.read()
+        except FileNotFoundError:
+            error_msg = f"No se encuentra el archivo de clave privada en {private_key_path}. Por favor, asegúrate de que el archivo bci_private_key.pem está presente en el directorio correcto."
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
         
         # Generar el token JWT
         token = jwt.encode(
