@@ -94,6 +94,10 @@ def auth():
         logger.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
         logger.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
 
+        # Generar el token JWT
+        jwt_token = generate_jwt()
+        logger.info("Token JWT generado")
+        
         # Crear objeto request
         request_obj = {
             "openbanking_intent_id": {
@@ -139,7 +143,21 @@ def auth():
         auth_url = auth_url.replace(' ', '+')
         logger.info(f"URL de autorización final: {auth_url}")
         
-        # Redirigir directamente a la URL de autorización
+        # Hacer la solicitud con el token JWT
+        headers = {
+            'Authorization': f'Bearer {jwt_token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        logger.info("Realizando solicitud de autorización con token JWT")
+        response = requests.get(auth_url, headers=headers)
+        
+        if response.status_code != 200:
+            logger.error(f"Error en la solicitud de autorización: {response.status_code} - {response.text}")
+            return jsonify({'error': f"Error en la solicitud de autorización: {response.text}"}), response.status_code
+            
+        # Si la respuesta es exitosa, redirigir a la URL de autorización
         return redirect(auth_url)
         
     except Exception as e:
