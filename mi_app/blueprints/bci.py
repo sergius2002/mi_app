@@ -94,10 +94,6 @@ def auth():
         logger.info(f"BCI_CLIENT_ID: {os.getenv('BCI_CLIENT_ID')}")
         logger.info(f"BCI_REDIRECT_URI: {os.getenv('BCI_REDIRECT_URI')}")
 
-        # Generar el token JWT
-        jwt_token = generate_jwt()
-        logger.info("Token JWT generado")
-
         # Crear objeto request
         request_obj = {
             "openbanking_intent_id": {
@@ -143,43 +139,7 @@ def auth():
         auth_url = auth_url.replace(' ', '+')
         logger.info(f"URL de autorización final: {auth_url}")
         
-        # Hacer la solicitud con el token JWT
-        headers = {
-            'Authorization': f'Bearer {jwt_token}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-        
-        # Primero, hacer una solicitud POST para obtener el token de acceso
-        token_url = f"{os.getenv('BCI_API_BASE_URL')}/v1/api-oauth/token"
-        token_data = {
-            'grant_type': 'client_credentials',
-            'client_id': os.getenv('BCI_CLIENT_ID'),
-            'client_secret': os.getenv('BCI_CLIENT_SECRET')
-        }
-        
-        logger.info("Solicitando token de acceso...")
-        token_response = requests.post(token_url, data=token_data, headers=headers)
-        
-        if token_response.status_code != 200:
-            logger.error(f"Error al obtener token de acceso: {token_response.status_code} - {token_response.text}")
-            return jsonify({'error': f"Error al obtener token de acceso: {token_response.text}"}), token_response.status_code
-        
-        access_token = token_response.json().get('access_token')
-        logger.info("Token de acceso obtenido correctamente")
-        
-        # Ahora, hacer la solicitud de autorización con el token de acceso
-        auth_headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-        
-        response = requests.get(auth_url, headers=auth_headers)
-        if response.status_code != 200:
-            logger.error(f"Error en la solicitud de autorización: {response.status_code} - {response.text}")
-            return jsonify({'error': f"Error en la solicitud de autorización: {response.text}"}), response.status_code
-            
+        # Redirigir directamente a la URL de autorización
         return redirect(auth_url)
         
     except Exception as e:
