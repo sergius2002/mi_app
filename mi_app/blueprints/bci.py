@@ -33,6 +33,11 @@ def bci_required(f):
 def generate_jwt():
     """Genera un token JWT para la autenticación con BCI"""
     try:
+        # Obtener el client secret
+        client_secret = os.getenv('BCI_CLIENT_SECRET')
+        if not client_secret:
+            raise ValueError("BCI_CLIENT_SECRET no está configurado")
+
         # Crear el payload del JWT
         payload = {
             'iss': os.getenv('BCI_CLIENT_ID'),
@@ -40,31 +45,26 @@ def generate_jwt():
             'aud': os.getenv('BCI_API_BASE_URL'),
             'exp': int(time.time()) + 300,  # 5 minutos de expiración
             'iat': int(time.time()),
-            'jti': str(uuid.uuid4())
+            'jti': str(uuid.uuid4()),
+            'scope': 'customers accounts transactions payments',
+            'response_type': 'code',
+            'redirect_uri': os.getenv('BCI_REDIRECT_URI'),
+            'state': 'bci_auth',
+            'nonce': 'bci_nonce'
         }
         
         # Crear el header del JWT
         headers = {
-            'alg': 'RS256',
+            'alg': 'HS256',
             'typ': 'JWT',
-            'kid': os.getenv('BCI_CLIENT_ID')
+            'kid': os.getenv('BCI_CLIENT_ID')  # Agregar el client ID como kid
         }
-        
-        # Obtener la clave privada
-        private_key_path = os.path.join(os.path.dirname(__file__), 'bci_private_key.pem')
-        try:
-            with open(private_key_path, 'r') as key_file:
-                private_key = key_file.read()
-        except FileNotFoundError:
-            error_msg = f"No se encuentra el archivo de clave privada en {private_key_path}. Por favor, asegúrate de que el archivo bci_private_key.pem está presente en el directorio correcto."
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
         
         # Generar el token JWT
         token = jwt.encode(
             payload,
-            private_key,
-            algorithm='RS256',
+            client_secret,
+            algorithm='HS256',
             headers=headers
         )
         
