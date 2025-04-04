@@ -36,24 +36,35 @@ def generate_jwt():
         # Crear el payload del JWT
         payload = {
             'iss': os.getenv('BCI_CLIENT_ID'),
-            'credentials': os.getenv('BCI_CLIENT_SECRET')
+            'sub': os.getenv('BCI_CLIENT_ID'),
+            'aud': os.getenv('BCI_API_BASE_URL'),
+            'exp': int(time.time()) + 300,  # 5 minutos de expiración
+            'iat': int(time.time()),
+            'jti': str(uuid.uuid4())
         }
         
         # Crear el header del JWT
         headers = {
-            'alg': 'HS256',
-            'typ': 'JWT'
+            'alg': 'RS256',
+            'typ': 'JWT',
+            'kid': os.getenv('BCI_CLIENT_ID')
         }
+        
+        # Obtener la clave privada
+        private_key_path = os.path.join(os.path.dirname(__file__), 'bci_private_key.pem')
+        with open(private_key_path, 'r') as key_file:
+            private_key = key_file.read()
         
         # Generar el token JWT
         token = jwt.encode(
             payload,
-            os.getenv('BCI_CLIENT_SECRET'),
-            algorithm='HS256',
+            private_key,
+            algorithm='RS256',
             headers=headers
         )
         
         logger.info("Token JWT generado correctamente")
+        logger.info(f"Token JWT: {token}")
         return token
         
     except Exception as e:
