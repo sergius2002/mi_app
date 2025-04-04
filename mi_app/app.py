@@ -69,7 +69,7 @@ cache = Cache(app, config={
 # -----------------------------------------------------------------------------
 app.register_blueprint(utilidades_bp)
 app.register_blueprint(margen_bp)
-app.register_blueprint(bci_bp)
+app.register_blueprint(bci_bp, url_prefix='/bci')
 
 # -----------------------------------------------------------------------------
 # Decorador login_required
