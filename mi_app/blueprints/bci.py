@@ -34,7 +34,7 @@ def auth():
         logger.info("Iniciando proceso de autorización BCI")
         
         # Verificar variables de entorno
-        required_vars = ['BCI_API_BASE_URL', 'BCI_CLIENT_ID', 'BCI_REDIRECT_URI']
+        required_vars = ['BCI_API_BASE_URL', 'BCI_CLIENT_ID', 'BCI_REDIRECT_URI', 'BCI_CLIENT_SECRET']
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
             error_msg = f"Faltan variables de entorno requeridas: {', '.join(missing_vars)}"
@@ -90,6 +90,17 @@ def auth():
         # Asegurarse de que la URL esté correctamente codificada
         auth_url = auth_url.replace(' ', '+')
         logger.info(f"URL de autorización final: {auth_url}")
+        
+        # Hacer la solicitud con el token JWT
+        headers = {
+            'Authorization': f'Bearer {os.getenv("BCI_CLIENT_SECRET")}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.get(auth_url, headers=headers)
+        if response.status_code != 200:
+            logger.error(f"Error en la solicitud de autorización: {response.status_code} - {response.text}")
+            return jsonify({'error': f"Error en la solicitud de autorización: {response.text}"}), response.status_code
             
         return redirect(auth_url)
         
