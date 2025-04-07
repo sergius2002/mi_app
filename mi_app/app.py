@@ -1134,7 +1134,8 @@ def resumen_compras_usdt():
     fin = fecha + "T23:59:59"
     
     try:
-        response = supabase.table("compras") \
+        # Obtener compras
+        response_compras = supabase.table("compras") \
             .select("*") \
             .eq("fiat", "CLP") \
             .eq("tradetype", "BUY") \
@@ -1142,18 +1143,50 @@ def resumen_compras_usdt():
             .lte("createtime", fin) \
             .execute()
         
-        compras_data = response.data if response.data else []
-        compras_data.sort(key=lambda x: x.get("createtime", ""), reverse=True)
+        compras_data = response_compras.data if response_compras.data else []
+        
+        # Obtener ventas
+        response_ventas = supabase.table("compras") \
+            .select("*") \
+            .eq("fiat", "CLP") \
+            .eq("tradetype", "SELL") \
+            .gte("createtime", inicio) \
+            .lte("createtime", fin) \
+            .execute()
+        
+        ventas_data = response_ventas.data if response_ventas.data else []
+        
+        # Combinar y ordenar todos los datos
+        all_data = []
+        for compra in compras_data:
+            all_data.append({
+                "createtime": compra.get("createtime", ""),
+                "totalprice": compra.get("totalprice", 0),
+                "amount": compra.get("amount", 0),
+                "unitprice": compra.get("unitprice", 0),
+                "tradetype": "BUY"
+            })
+        
+        for venta in ventas_data:
+            all_data.append({
+                "createtime": venta.get("createtime", ""),
+                "totalprice": -venta.get("totalprice", 0),  # Negativo para ventas
+                "amount": -venta.get("amount", 0),  # Negativo para ventas
+                "unitprice": venta.get("unitprice", 0),
+                "tradetype": "SELL"
+            })
+        
+        all_data.sort(key=lambda x: x.get("createtime", ""), reverse=True)
         
         # Calcular totales
-        total_clp = sum(compra.get("totalprice", 0) for compra in compras_data)
-        total_usdt = sum(compra.get("amount", 0) for compra in compras_data)
-        tasa_promedio = total_clp / total_usdt if total_usdt > 0 else 0
+        total_clp = sum(item.get("totalprice", 0) for item in all_data)
+        total_usdt = sum(item.get("amount", 0) for item in all_data)
+        tasa_promedio = total_clp / total_usdt if total_usdt != 0 else 0
         
         return render_template(
             "admin/resumen_compras_usdt.html",
             active_page="admin",
-            compras_data=compras_data,
+            compras_data=all_data,
             total_clp=total_clp,
             total_usdt=total_usdt,
             tasa_promedio=tasa_promedio,
