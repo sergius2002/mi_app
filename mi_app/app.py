@@ -1164,6 +1164,48 @@ def resumen_compras_usdt():
         flash("Error al obtener el resumen de compras USDT.")
         return redirect(url_for("admin.index"))
 
+@admin_bp.route("/resumen_ventas_usdt", methods=["GET"])
+@login_required
+@user_allowed
+def resumen_ventas_usdt():
+    fecha = request.args.get("fecha")
+    if not fecha:
+        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+    
+    inicio = fecha + "T00:00:00"
+    fin = fecha + "T23:59:59"
+    
+    try:
+        response = supabase.table("compras") \
+            .select("*") \
+            .eq("fiat", "CLP") \
+            .eq("tradetype", "SELL") \
+            .gte("createtime", inicio) \
+            .lte("createtime", fin) \
+            .execute()
+        
+        ventas_data = response.data if response.data else []
+        ventas_data.sort(key=lambda x: x.get("createtime", ""), reverse=True)
+        
+        # Calcular totales
+        total_clp = sum(venta.get("totalprice", 0) for venta in ventas_data)
+        total_usdt = sum(venta.get("amount", 0) for venta in ventas_data)
+        tasa_promedio = total_clp / total_usdt if total_usdt > 0 else 0
+        
+        return render_template(
+            "admin/resumen_ventas_usdt.html",
+            active_page="admin",
+            ventas_data=ventas_data,
+            total_clp=total_clp,
+            total_usdt=total_usdt,
+            tasa_promedio=tasa_promedio,
+            fecha=fecha
+        )
+    except Exception as e:
+        logging.error("Error al obtener resumen de ventas USDT: %s", e)
+        flash("Error al obtener el resumen de ventas USDT.")
+        return redirect(url_for("admin.index"))
+
 # Rutas generales
 @app.route("/")
 def index():

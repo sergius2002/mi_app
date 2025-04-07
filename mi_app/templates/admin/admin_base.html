@@ -27,6 +27,9 @@
         <a href="{{ url_for('admin.resumen_compras_usdt') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.resumen_compras_usdt' %}active{% endif %}">
           <i class="fas fa-list"></i> Compras USDT
         </a>
+        <a href="{{ url_for('admin.resumen_ventas_usdt') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.resumen_ventas_usdt' %}active{% endif %}">
+          <i class="fas fa-list"></i> Ventas USDT
+        </a>
         <a href="{{ url_for('admin.tasa_actual') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.tasa_actual' %}active{% endif %}">
           <i class="fas fa-chart-line"></i> Tasa actual
         </a>

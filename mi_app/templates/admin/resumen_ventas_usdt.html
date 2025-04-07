@@ -1,0 +1,90 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Ventas USDT{% endblock %}
+
+{% block admin_title %}{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid mt-2">
+  <div class="row justify-content-center">
+    <div class="col-lg-10 col-md-12">
+      <div class="card shadow-lg">
+        <div class="card-header bg-azul-oscuro text-white text-center">
+          <h3 class="mb-0">Ventas USDT</h3>
+        </div>
+        <div class="card-body">
+          <!-- Formulario de fecha -->
+          <form method="get" action="{{ url_for('admin.resumen_ventas_usdt') }}" class="mb-4">
+            <div class="d-flex justify-content-center">
+              <div class="input-group" style="max-width: 400px;">
+                <input type="date" id="fecha" name="fecha" value="{{ fecha }}" class="form-control form-control-lg">
+                <button type="submit" class="btn btn-lg btn-custom">Buscar</button>
+              </div>
+            </div>
+          </form>
+
+          {% if ventas_data %}
+            <!-- Tabla de ventas -->
+            <div class="table-responsive">
+              <table class="table table-hover table-bordered text-center mb-4">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Hora</th>
+                    <th>CLP</th>
+                    <th>USDT</th>
+                    <th>Tasa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for venta in ventas_data %}
+                  <tr>
+                    <td>{{ venta.createtime | format_time }}</td>
+                    <td>{{ venta.totalprice | format_int }}</td>
+                    <td>{{ "{:,.2f}".format(venta.amount) }}</td>
+                    <td>{{ venta.unitprice | format_int }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Resumen -->
+            <div class="row justify-content-center">
+              <div class="col-md-4">
+                <div class="card bg-light mb-3">
+                  <div class="card-body text-center">
+                    <h5 class="card-title">Total CLP</h5>
+                    <p class="h3 text-primary">{{ total_clp | format_int }}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card bg-light mb-3">
+                  <div class="card-body text-center">
+                    <h5 class="card-title">Total USDT</h5>
+                    <p class="h3 text-success">{{ "{:,.2f}".format(total_usdt) }}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card bg-light mb-3">
+                  <div class="card-body text-center">
+                    <h5 class="card-title">Tasa Promedio</h5>
+                    <p class="h3 text-info">{{ tasa_promedio | format_int }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div class="alert alert-warning text-center" role="alert">
+              No se encontraron ventas USDT para la fecha seleccionada.
+            </div>
+          {% endif %}
+        </div>
+        <div class="card-footer text-center">
+          <a href="{{ url_for('admin.index') }}" class="btn btn-lg btn-custom">Volver</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 
