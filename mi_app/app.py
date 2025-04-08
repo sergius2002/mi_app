@@ -237,8 +237,8 @@ def actualizar_datos():
     loop.close()
 
     # Usar la zona horaria local para el tiempo actual
-    tiempo_actual, is_dst = get_local_time()
-    tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
+    now, is_dst = get_local_time()
+    tiempo_str = now.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
     if precio_banesco_actualizado is not None:
@@ -266,49 +266,27 @@ def actualizar_datos():
                      precios_mercantil[-1], precios_provincial[-1])
 
 def generar_grafico():
-    try:
-        actualizar_datos()
-        fig, ax = plt.subplots(figsize=(12, 6))
-        fig.patch.set_facecolor('none')  # Fondo transparente
-        ax.set_facecolor('none')  # Fondo del eje transparente
-
-        # Graficar líneas
-        ax.plot(tiempos, precios_banesco, label='Banesco', color='blue')
-        ax.plot(tiempos, precios_bank_transfer, label='Venezuela', color='orange')
-        ax.plot(tiempos, precios_mercantil, label='Mercantil', color='green')
-        ax.plot(tiempos, precios_provincial, label='Provincial', color='red')
-
-        # Añadir etiquetas de datos
-        if precios_banesco:
-            ax.annotate(f'{precios_banesco[-1]:.2f}', xy=(tiempos[-1], precios_banesco[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='blue', va='bottom', fontsize=10)
-        if precios_bank_transfer:
-            ax.annotate(f'{precios_bank_transfer[-1]:.2f}', xy=(tiempos[-1], precios_bank_transfer[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='orange', va='bottom', fontsize=10)
-        if precios_mercantil:
-            ax.annotate(f'{precios_mercantil[-1]:.2f}', xy=(tiempos[-1], precios_mercantil[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='green', va='bottom', fontsize=10)
-        if precios_provincial:
-            ax.annotate(f'{precios_provincial[-1]:.2f}', xy=(tiempos[-1], precios_provincial[-1]),
-                        xytext=(5, 0), textcoords='offset points', color='red', va='bottom', fontsize=10)
-
-        # Configurar etiquetas y leyenda
-        ax.set_xlabel('Hora', fontsize=12)
-        ax.set_ylabel('Precio (VES)', fontsize=12)
-        ax.legend(loc='upper left', fontsize=10)
-
-        # Configurar ticks
-        if len(tiempos) > 1:
-            ax.set_xticks([tiempos[0], tiempos[-1]])
-        else:
-            ax.set_xticks(tiempos)
-        ax.tick_params(axis='x', rotation=45, labelsize=10)
-
-        plt.tight_layout()
-        return fig
-    except Exception as e:
-        logging.error(f"Error al generar el gráfico: {e}")
-        raise  # Relanzar para depuración
+    plt.figure(figsize=(12, 6))
+    plt.plot(tiempos, precios_banesco, label='Banesco', marker='o', color='#FF0000')
+    plt.plot(tiempos, precios_bank_transfer, label='Bank Transfer', marker='o', color='#0000FF')
+    plt.plot(tiempos, precios_mercantil, label='Mercantil', marker='o', color='#00FF00')
+    plt.plot(tiempos, precios_provincial, label='Provincial', marker='o', color='#FF00FF')
+    
+    plt.title('Tasas de Cambio USDT/VES', fontsize=14, pad=20)
+    plt.xlabel('Hora y Fecha', fontsize=12, labelpad=10)
+    plt.ylabel('Precio (VES)', fontsize=12, labelpad=10)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    
+    # Rotar las etiquetas del eje x para mejor legibilidad
+    plt.xticks(rotation=45, ha='right')
+    
+    # Ajustar el layout para evitar que las etiquetas se corten
+    plt.tight_layout()
+    
+    # Guardar el gráfico
+    plt.savefig('static/grafico.png', bbox_inches='tight', dpi=300)
+    plt.close()
 
 @grafico_bp.route("/plot.png")
 @login_required
