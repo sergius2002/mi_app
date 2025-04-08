@@ -18,11 +18,26 @@ print("BCI_CLIENT_SECRET:", os.getenv('BCI_CLIENT_SECRET'))
 
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
-os.environ['TZ'] = 'America/Argentina/Buenos_Aires'  # Forzar zona horaria
+
+# Configuración de zona horaria
+import pytz
+local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
+os.environ['TZ'] = 'America/Argentina/Buenos_Aires'
 time.tzset()
 
-import pytz
-local_tz = pytz.timezone('America/Argentina/Buenos_Aires')  # Forzar zona horaria
+# Función helper para obtener la hora local actual
+def get_local_time():
+    return datetime.now(local_tz)
+
+# Función helper para formatear fechas con zona horaria
+def format_datetime_with_timezone(dt):
+    if dt is None:
+        return ""
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
+    if dt.tzinfo is None:
+        dt = local_tz.localize(dt)
+    return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app, send_file
 from supabase import create_client, Client
@@ -141,13 +156,13 @@ def cargar_datos_historicos():
 
 def reiniciar_datos_diarios():
     global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now, is_dst = get_local_time()
+    now = get_local_time()
     
     # Solo reiniciar si:
     # 1. Es la primera vez (last_reset_date es None)
     # 2. Es un nuevo día y son las 8:00 am
     if last_reset_date is None or (now.hour == 8 and now.date() > last_reset_date):
-        logging.info(f"Reiniciando datos del gráfico y CSV a las {now.strftime('%Y-%m-%d %H:%M:%S')} (DST: {is_dst})...")
+        logging.info(f"Reiniciando datos del gráfico y CSV a las {format_datetime_with_timezone(now)}...")
         
         # Guardar una copia de respaldo antes de reiniciar
         if os.path.exists(DATA_FILE):
@@ -237,10 +252,8 @@ def actualizar_datos():
     loop.close()
 
     # Usar la zona horaria local para el tiempo actual
-    now, is_dst = get_local_time()
-    # Convertir a naive datetime antes de formatear
-    now_naive = now.replace(tzinfo=None)
-    tiempo_str = now_naive.strftime('%H:%M\n%d - %b')
+    tiempo_actual = get_local_time()
+    tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
     if precio_banesco_actualizado is not None:
@@ -269,37 +282,48 @@ def actualizar_datos():
 
 def generar_grafico():
     try:
-        plt.figure(figsize=(12, 6))
-        
-        # Asegurarse de que tenemos datos para graficar
-        if not tiempos or not precios_banesco:
-            logging.warning("No hay datos para graficar")
-            return
-            
-        # Graficar los datos
-        plt.plot(tiempos, precios_banesco, label='Banesco', marker='o', color='#FF0000')
-        plt.plot(tiempos, precios_bank_transfer, label='Bank Transfer', marker='o', color='#0000FF')
-        plt.plot(tiempos, precios_mercantil, label='Mercantil', marker='o', color='#00FF00')
-        plt.plot(tiempos, precios_provincial, label='Provincial', marker='o', color='#FF00FF')
-        
-        plt.title('Tasas de Cambio USDT/VES', fontsize=14, pad=20)
-        plt.xlabel('Hora y Fecha', fontsize=12, labelpad=10)
-        plt.ylabel('Precio (VES)', fontsize=12, labelpad=10)
-        plt.grid(True, linestyle='--', alpha=0.7)
-        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-        
-        # Rotar las etiquetas del eje x para mejor legibilidad
-        plt.xticks(rotation=45, ha='right')
-        
-        # Ajustar el layout para evitar que las etiquetas se corten
+        actualizar_datos()
+        fig, ax = plt.subplots(figsize=(12, 6))
+        fig.patch.set_facecolor('none')  # Fondo transparente
+        ax.set_facecolor('none')  # Fondo del eje transparente
+
+        # Graficar líneas
+        ax.plot(tiempos, precios_banesco, label='Banesco', color='blue')
+        ax.plot(tiempos, precios_bank_transfer, label='Venezuela', color='orange')
+        ax.plot(tiempos, precios_mercantil, label='Mercantil', color='green')
+        ax.plot(tiempos, precios_provincial, label='Provincial', color='red')
+
+        # Añadir etiquetas de datos
+        if precios_banesco:
+            ax.annotate(f'{precios_banesco[-1]:.2f}', xy=(tiempos[-1], precios_banesco[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='blue', va='bottom', fontsize=10)
+        if precios_bank_transfer:
+            ax.annotate(f'{precios_bank_transfer[-1]:.2f}', xy=(tiempos[-1], precios_bank_transfer[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='orange', va='bottom', fontsize=10)
+        if precios_mercantil:
+            ax.annotate(f'{precios_mercantil[-1]:.2f}', xy=(tiempos[-1], precios_mercantil[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='green', va='bottom', fontsize=10)
+        if precios_provincial:
+            ax.annotate(f'{precios_provincial[-1]:.2f}', xy=(tiempos[-1], precios_provincial[-1]),
+                        xytext=(5, 0), textcoords='offset points', color='red', va='bottom', fontsize=10)
+
+        # Configurar etiquetas y leyenda
+        ax.set_xlabel('Hora', fontsize=12)
+        ax.set_ylabel('Precio (VES)', fontsize=12)
+        ax.legend(loc='upper left', fontsize=10)
+
+        # Configurar ticks
+        if len(tiempos) > 1:
+            ax.set_xticks([tiempos[0], tiempos[-1]])
+        else:
+            ax.set_xticks(tiempos)
+        ax.tick_params(axis='x', rotation=45, labelsize=10)
+
         plt.tight_layout()
-        
-        # Guardar el gráfico
-        plt.savefig('static/grafico.png', bbox_inches='tight', dpi=300)
-        plt.close()
+        return fig
     except Exception as e:
         logging.error(f"Error al generar el gráfico: {e}")
-        raise
+        raise  # Relanzar para depuración
 
 @grafico_bp.route("/plot.png")
 @login_required
@@ -389,15 +413,13 @@ def format_fecha_detec(value):
             dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
             # Convertir a zona horaria local
             dt = dt.astimezone(local_tz)
-            # Formatear la fecha incluyendo información de DST
-            is_dst = bool(dt.dst())
-            return f"{dt.strftime('%Y-%m-%d %H:%M:%S')} {'(DST)' if is_dst else ''}"
+            # Formatear la fecha
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(value, datetime):
             # Si ya es datetime, asegurarse de que tenga zona horaria
             if value.tzinfo is None:
                 value = local_tz.localize(value)
-            is_dst = bool(value.dst())
-            return f"{value.astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')} {'(DST)' if is_dst else ''}"
+            return value.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
         return str(value)
     except Exception as e:
         logging.error(f"Error formateando fecha_detec: {e}, valor: {value}")
@@ -904,7 +926,7 @@ def calcular_margen():
 def tasa_compras():
     fecha = request.args.get("fecha")
     if not fecha:
-        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha = get_local_time().strftime("%Y-%m-%d")
     inicio = fecha + "T00:00:00"
     fin = fecha + "T23:59:59"
     try:
@@ -986,17 +1008,16 @@ def ingresar_usdt():
             return redirect(url_for("admin.ingresar_usdt"))
     
     # Asegurarse de que la fecha actual está en la zona horaria correcta
-    current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
+    current_datetime = get_local_time().strftime("%Y-%m-%dT%H:%M")
     tradetype_options = ["BUY", "SELL"]
     fiat_options = ["CLP", "VES", "USD"]
     
-    # Renderizar el template sin valor por defecto para totalprice
     return render_template("ingresar_usdt.html", 
                          active_page="admin", 
                          current_datetime=current_datetime,
                          tradetype_options=tradetype_options, 
                          fiat_options=fiat_options,
-                         totalprice="")  # Enviamos un string vacío explícitamente
+                         totalprice="")
 
 @admin_bp.route("/tasa_actual", methods=["GET"])
 @login_required
@@ -1389,8 +1410,7 @@ def format_datetime_with_timezone(dt):
         dt = datetime.fromisoformat(dt)
     if dt.tzinfo is None:
         dt = local_tz.localize(dt)
-    is_dst = bool(dt.dst())
-    return f"{dt.strftime('%Y-%m-%d %H:%M:%S')} {'(DST)' if is_dst else ''}"
+    return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
 
 # Agregar filtro para formatear moneda
 @app.template_filter('format_currency')
@@ -1401,14 +1421,6 @@ def format_currency(value):
         return f"${float(value):,.2f}"
     except (ValueError, TypeError):
         return str(value)
-
-# Función helper para obtener la hora local considerando el cambio de horario
-def get_local_time():
-    """Obtiene la hora local considerando el cambio de horario"""
-    now = datetime.now(local_tz)
-    # Verificar si estamos en horario de invierno (UTC-3) o verano (UTC-2)
-    is_dst = bool(local_tz.localize(now).dst())
-    return now, is_dst
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
