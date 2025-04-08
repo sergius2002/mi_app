@@ -238,7 +238,9 @@ def actualizar_datos():
 
     # Usar la zona horaria local para el tiempo actual
     now, is_dst = get_local_time()
-    tiempo_str = now.strftime('%H:%M\n%d - %b')
+    # Convertir a naive datetime antes de formatear
+    now_naive = now.replace(tzinfo=None)
+    tiempo_str = now_naive.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
     if precio_banesco_actualizado is not None:
@@ -267,19 +269,18 @@ def actualizar_datos():
 
 def generar_grafico():
     try:
-        # Convertir los tiempos a naive datetime si tienen zona horaria
-        tiempos_naive = []
-        for t in tiempos:
-            if isinstance(t, datetime) and t.tzinfo is not None:
-                tiempos_naive.append(t.replace(tzinfo=None))
-            else:
-                tiempos_naive.append(t)
-
         plt.figure(figsize=(12, 6))
-        plt.plot(tiempos_naive, precios_banesco, label='Banesco', marker='o', color='#FF0000')
-        plt.plot(tiempos_naive, precios_bank_transfer, label='Bank Transfer', marker='o', color='#0000FF')
-        plt.plot(tiempos_naive, precios_mercantil, label='Mercantil', marker='o', color='#00FF00')
-        plt.plot(tiempos_naive, precios_provincial, label='Provincial', marker='o', color='#FF00FF')
+        
+        # Asegurarse de que tenemos datos para graficar
+        if not tiempos or not precios_banesco:
+            logging.warning("No hay datos para graficar")
+            return
+            
+        # Graficar los datos
+        plt.plot(tiempos, precios_banesco, label='Banesco', marker='o', color='#FF0000')
+        plt.plot(tiempos, precios_bank_transfer, label='Bank Transfer', marker='o', color='#0000FF')
+        plt.plot(tiempos, precios_mercantil, label='Mercantil', marker='o', color='#00FF00')
+        plt.plot(tiempos, precios_provincial, label='Provincial', marker='o', color='#FF00FF')
         
         plt.title('Tasas de Cambio USDT/VES', fontsize=14, pad=20)
         plt.xlabel('Hora y Fecha', fontsize=12, labelpad=10)
