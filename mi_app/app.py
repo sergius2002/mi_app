@@ -266,27 +266,39 @@ def actualizar_datos():
                      precios_mercantil[-1], precios_provincial[-1])
 
 def generar_grafico():
-    plt.figure(figsize=(12, 6))
-    plt.plot(tiempos, precios_banesco, label='Banesco', marker='o', color='#FF0000')
-    plt.plot(tiempos, precios_bank_transfer, label='Bank Transfer', marker='o', color='#0000FF')
-    plt.plot(tiempos, precios_mercantil, label='Mercantil', marker='o', color='#00FF00')
-    plt.plot(tiempos, precios_provincial, label='Provincial', marker='o', color='#FF00FF')
-    
-    plt.title('Tasas de Cambio USDT/VES', fontsize=14, pad=20)
-    plt.xlabel('Hora y Fecha', fontsize=12, labelpad=10)
-    plt.ylabel('Precio (VES)', fontsize=12, labelpad=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    
-    # Rotar las etiquetas del eje x para mejor legibilidad
-    plt.xticks(rotation=45, ha='right')
-    
-    # Ajustar el layout para evitar que las etiquetas se corten
-    plt.tight_layout()
-    
-    # Guardar el gráfico
-    plt.savefig('static/grafico.png', bbox_inches='tight', dpi=300)
-    plt.close()
+    try:
+        # Convertir los tiempos a naive datetime si tienen zona horaria
+        tiempos_naive = []
+        for t in tiempos:
+            if isinstance(t, datetime) and t.tzinfo is not None:
+                tiempos_naive.append(t.replace(tzinfo=None))
+            else:
+                tiempos_naive.append(t)
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(tiempos_naive, precios_banesco, label='Banesco', marker='o', color='#FF0000')
+        plt.plot(tiempos_naive, precios_bank_transfer, label='Bank Transfer', marker='o', color='#0000FF')
+        plt.plot(tiempos_naive, precios_mercantil, label='Mercantil', marker='o', color='#00FF00')
+        plt.plot(tiempos_naive, precios_provincial, label='Provincial', marker='o', color='#FF00FF')
+        
+        plt.title('Tasas de Cambio USDT/VES', fontsize=14, pad=20)
+        plt.xlabel('Hora y Fecha', fontsize=12, labelpad=10)
+        plt.ylabel('Precio (VES)', fontsize=12, labelpad=10)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+        
+        # Rotar las etiquetas del eje x para mejor legibilidad
+        plt.xticks(rotation=45, ha='right')
+        
+        # Ajustar el layout para evitar que las etiquetas se corten
+        plt.tight_layout()
+        
+        # Guardar el gráfico
+        plt.savefig('static/grafico.png', bbox_inches='tight', dpi=300)
+        plt.close()
+    except Exception as e:
+        logging.error(f"Error al generar el gráfico: {e}")
+        raise
 
 @grafico_bp.route("/plot.png")
 @login_required
