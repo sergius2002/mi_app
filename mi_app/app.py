@@ -18,26 +18,11 @@ print("BCI_CLIENT_SECRET:", os.getenv('BCI_CLIENT_SECRET'))
 
 # Configurar el backend de Matplotlib sin interfaz
 os.environ['MPLBACKEND'] = 'Agg'
-
-# Configuración de zona horaria
-import pytz
-local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
-os.environ['TZ'] = 'America/Argentina/Buenos_Aires'
+os.environ['TZ'] = 'America/Santiago'  # Forzar zona horaria
 time.tzset()
 
-# Función helper para obtener la hora local actual
-def get_local_time():
-    return datetime.now(local_tz)
-
-# Función helper para formatear fechas con zona horaria
-def format_datetime_with_timezone(dt):
-    if dt is None:
-        return ""
-    if isinstance(dt, str):
-        dt = datetime.fromisoformat(dt)
-    if dt.tzinfo is None:
-        dt = local_tz.localize(dt)
-    return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
+import pytz
+local_tz = pytz.timezone('America/Santiago')  # Forzar zona horaria
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Blueprint, current_app, send_file
 from supabase import create_client, Client
@@ -156,13 +141,13 @@ def cargar_datos_historicos():
 
 def reiniciar_datos_diarios():
     global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now = get_local_time()
+    now = datetime.now(local_tz)
     
     # Solo reiniciar si:
     # 1. Es la primera vez (last_reset_date es None)
     # 2. Es un nuevo día y son las 8:00 am
     if last_reset_date is None or (now.hour == 8 and now.date() > last_reset_date):
-        logging.info(f"Reiniciando datos del gráfico y CSV a las {format_datetime_with_timezone(now)}...")
+        logging.info(f"Reiniciando datos del gráfico y CSV a las {now.strftime('%Y-%m-%d %H:%M:%S')}...")
         
         # Guardar una copia de respaldo antes de reiniciar
         if os.path.exists(DATA_FILE):
@@ -252,7 +237,7 @@ def actualizar_datos():
     loop.close()
 
     # Usar la zona horaria local para el tiempo actual
-    tiempo_actual = get_local_time()
+    tiempo_actual = datetime.now(local_tz)
     tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
@@ -926,7 +911,7 @@ def calcular_margen():
 def tasa_compras():
     fecha = request.args.get("fecha")
     if not fecha:
-        fecha = get_local_time().strftime("%Y-%m-%d")
+        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
     inicio = fecha + "T00:00:00"
     fin = fecha + "T23:59:59"
     try:
@@ -1008,16 +993,17 @@ def ingresar_usdt():
             return redirect(url_for("admin.ingresar_usdt"))
     
     # Asegurarse de que la fecha actual está en la zona horaria correcta
-    current_datetime = get_local_time().strftime("%Y-%m-%dT%H:%M")
+    current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
     tradetype_options = ["BUY", "SELL"]
     fiat_options = ["CLP", "VES", "USD"]
     
+    # Renderizar el template sin valor por defecto para totalprice
     return render_template("ingresar_usdt.html", 
                          active_page="admin", 
                          current_datetime=current_datetime,
                          tradetype_options=tradetype_options, 
                          fiat_options=fiat_options,
-                         totalprice="")
+                         totalprice="")  # Enviamos un string vacío explícitamente
 
 @admin_bp.route("/tasa_actual", methods=["GET"])
 @login_required
