@@ -141,13 +141,13 @@ def cargar_datos_historicos():
 
 def reiniciar_datos_diarios():
     global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now = datetime.now(local_tz)
+    now, is_dst = get_local_time()
     
     # Solo reiniciar si:
     # 1. Es la primera vez (last_reset_date es None)
     # 2. Es un nuevo día y son las 8:00 am
     if last_reset_date is None or (now.hour == 8 and now.date() > last_reset_date):
-        logging.info(f"Reiniciando datos del gráfico y CSV a las {now.strftime('%Y-%m-%d %H:%M:%S')}...")
+        logging.info(f"Reiniciando datos del gráfico y CSV a las {now.strftime('%Y-%m-%d %H:%M:%S')} (DST: {is_dst})...")
         
         # Guardar una copia de respaldo antes de reiniciar
         if os.path.exists(DATA_FILE):
@@ -237,7 +237,7 @@ def actualizar_datos():
     loop.close()
 
     # Usar la zona horaria local para el tiempo actual
-    tiempo_actual = datetime.now(local_tz)
+    tiempo_actual, is_dst = get_local_time()
     tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
@@ -398,13 +398,15 @@ def format_fecha_detec(value):
             dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
             # Convertir a zona horaria local
             dt = dt.astimezone(local_tz)
-            # Formatear la fecha
-            return dt.strftime("%Y-%m-%d %H:%M:%S")
+            # Formatear la fecha incluyendo información de DST
+            is_dst = bool(dt.dst())
+            return f"{dt.strftime('%Y-%m-%d %H:%M:%S')} {'(DST)' if is_dst else ''}"
         elif isinstance(value, datetime):
             # Si ya es datetime, asegurarse de que tenga zona horaria
             if value.tzinfo is None:
                 value = local_tz.localize(value)
-            return value.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
+            is_dst = bool(value.dst())
+            return f"{value.astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')} {'(DST)' if is_dst else ''}"
         return str(value)
     except Exception as e:
         logging.error(f"Error formateando fecha_detec: {e}, valor: {value}")
@@ -1396,7 +1398,8 @@ def format_datetime_with_timezone(dt):
         dt = datetime.fromisoformat(dt)
     if dt.tzinfo is None:
         dt = local_tz.localize(dt)
-    return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+    is_dst = bool(dt.dst())
+    return f"{dt.strftime('%Y-%m-%d %H:%M:%S')} {'(DST)' if is_dst else ''}"
 
 # Agregar filtro para formatear moneda
 @app.template_filter('format_currency')
@@ -1407,6 +1410,14 @@ def format_currency(value):
         return f"${float(value):,.2f}"
     except (ValueError, TypeError):
         return str(value)
+
+# Función helper para obtener la hora local considerando el cambio de horario
+def get_local_time():
+    """Obtiene la hora local considerando el cambio de horario"""
+    now = datetime.now(local_tz)
+    # Verificar si estamos en horario de invierno (UTC-3) o verano (UTC-2)
+    is_dst = bool(local_tz.localize(now).dst())
+    return now, is_dst
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
