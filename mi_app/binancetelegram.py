@@ -5,11 +5,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 import os
 import time
-os.environ['TZ'] = 'America/Argentina/Buenos_Aires'
+os.environ['TZ'] = 'America/Santiago'
 time.tzset()
 
 import pytz
-local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
+local_tz = pytz.timezone('America/Santiago')
 
 from binance.client import Client
 import pandas as pd
@@ -75,7 +75,7 @@ def ejecutar_escaneo_binance(fecha_escaneo=None):
             # se convierte a datetime con zona UTC y luego se transforma a la zona local.
             if 'createTime' in df.columns:
                 df['createTime'] = pd.to_datetime(df['createTime'], unit='ms', errors='coerce', utc=True)
-                df['createTime'] = df['createTime'].dt.tz_convert('America/Argentina/Buenos_Aires')
+                df['createTime'] = df['createTime'].dt.tz_convert('America/Santiago')
                 df['createTime'] = df['createTime'].dt.floor('s')
             else:
                 logging.error("La columna 'createTime' no existe en los datos.")

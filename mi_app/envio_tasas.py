@@ -21,7 +21,7 @@ from telebot.async_telebot import AsyncTeleBot
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 # Zona horaria
-local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
+local_tz = pytz.timezone('America/Santiago')
 
 # Configuración de logging
 logging.basicConfig(
