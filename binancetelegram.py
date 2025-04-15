@@ -97,9 +97,9 @@ def ejecutar_escaneo_binance(fecha_escaneo=None):
 
             # Filtrar registros descartando aquellos con estados no válidos, si la columna existe
             if 'orderStatus' in df.columns:
-                estados_invalidos = ['CANCELLED', 'CANCELLED_BY_SYSTEM', 'PENDING',
-                                     'TRADING', 'PROCESSING', 'PARTIALLY_FILLED']
-                df = df[~df['orderStatus'].isin(estados_invalidos)]
+                # Solo aceptar transacciones COMPLETED
+                df = df[df['orderStatus'] == 'COMPLETED']
+                logging.info(f"Filtrado de transacciones: solo se aceptan transacciones COMPLETED")
 
             # Filtrar registros por fecha (comparar solo la fecha, sin hora)
             df = df[df['createTime'].dt.date == fecha_escaneo_dt.date()]
