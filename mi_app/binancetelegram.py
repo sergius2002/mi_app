@@ -37,7 +37,7 @@ def ejecutar_escaneo_binance(fecha_escaneo=None):
 
     # Si no se proporciona una fecha, se usa la fecha actual (en zona local)
     if fecha_escaneo is None:
-        fecha_escaneo = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha_escaneo = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     fecha_escaneo_dt = datetime.strptime(fecha_escaneo, "%Y-%m-%d")
 
     def llamada_binance():
@@ -143,7 +143,7 @@ def ejecutar_escaneo_binance(fecha_escaneo=None):
 
     while True:
         # Actualizar la fecha de escaneo si ha cambiado el día
-        current_date_str = datetime.now(local_tz).strftime("%Y-%m-%d")
+        current_date_str = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
         if current_date_str != fecha_escaneo:
             fecha_escaneo = current_date_str
             fecha_escaneo_dt = datetime.strptime(fecha_escaneo, "%Y-%m-%d")

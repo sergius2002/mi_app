@@ -54,6 +54,30 @@ from blueprints.bci import bci_bp
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # -----------------------------------------------------------------------------
+# Configuración de ajuste de hora
+# -----------------------------------------------------------------------------
+HOUR_ADJUSTMENT = int(os.getenv('HOUR_ADJUSTMENT', '0'))  # Ajuste de hora en horas (puede ser positivo o negativo)
+
+def adjust_datetime(dt):
+    """
+    Ajusta un datetime según la configuración de HOUR_ADJUSTMENT.
+    Args:
+        dt: datetime a ajustar
+    Returns:
+        datetime ajustado
+    """
+    if not isinstance(dt, datetime):
+        try:
+            dt = datetime.fromisoformat(dt)
+        except Exception:
+            return dt
+    
+    if dt.tzinfo is None:
+        dt = local_tz.localize(dt)
+    
+    return dt + timedelta(hours=HOUR_ADJUSTMENT)
+
+# -----------------------------------------------------------------------------
 # Inicialización de la aplicación y cache
 # -----------------------------------------------------------------------------
 app = Flask(__name__)
@@ -141,7 +165,7 @@ def cargar_datos_historicos():
 
 def reiniciar_datos_diarios():
     global last_reset_date, tiempos, precios_banesco, precios_bank_transfer, precios_mercantil, precios_provincial
-    now = datetime.now(local_tz)
+    now = adjust_datetime(datetime.now(local_tz))
     
     # Solo reiniciar si:
     # 1. Es la primera vez (last_reset_date es None)
@@ -237,7 +261,7 @@ def actualizar_datos():
     loop.close()
 
     # Usar la zona horaria local para el tiempo actual
-    tiempo_actual = datetime.now(local_tz)
+    tiempo_actual = adjust_datetime(datetime.now(local_tz))
     tiempo_str = tiempo_actual.strftime('%H:%M\n%d - %b')
     tiempos.append(tiempo_str)
 
@@ -396,15 +420,14 @@ def format_fecha_detec(value):
         if isinstance(value, str):
             # Si es una cadena ISO, convertirla a datetime
             dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
-            # Convertir a zona horaria local
-            dt = dt.astimezone(local_tz)
+            # Convertir a zona horaria local y ajustar
+            dt = adjust_datetime(dt)
             # Formatear la fecha
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(value, datetime):
-            # Si ya es datetime, asegurarse de que tenga zona horaria
-            if value.tzinfo is None:
-                value = local_tz.localize(value)
-            return value.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S")
+            # Si ya es datetime, asegurarse de que tenga zona horaria y ajustar
+            dt = adjust_datetime(value)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
         return str(value)
     except Exception as e:
         logging.error(f"Error formateando fecha_detec: {e}, valor: {value}")
@@ -478,7 +501,7 @@ def filter_pedidos(query):
         query = query.ilike("cliente", f"%{cliente}%")
     fecha = request.args.get("fecha")
     if not fecha:
-        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     query = query.eq("fecha", fecha)
     brs = request.args.get("brs", "").strip()
     if brs:
@@ -612,7 +635,7 @@ def nuevo():
             monto = int(float(request.form.get("monto")))
             fecha = request.form.get("fecha")
             verificada = True if request.form.get("verificada") == "on" else False
-            fecha_detec = datetime.now(local_tz).isoformat()
+            fecha_detec = adjust_datetime(datetime.now(local_tz)).isoformat()
             data = f"{cliente}-{empresa}-{rut}-{monto}-{fecha}-{verificada}"
             hash_value = hashlib.sha256(data.encode('utf-8')).hexdigest()
             supabase.table("transferencias").insert({
@@ -632,7 +655,7 @@ def nuevo():
             logging.error("Error al insertar transferencia: %s", e)
             flash("Error al ingresar la transferencia: " + str(e))
             return redirect(url_for("transferencias.nuevo"))
-    current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    current_date = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     try:
         response_pagadores = supabase.table("pagadores").select("cliente").execute()
         cliente_pagadores = [p["cliente"] for p in response_pagadores.data] if response_pagadores.data else []
@@ -684,7 +707,7 @@ def editar_transferencia(transfer_id):
             logging.error("Error al actualizar la transferencia: %s", e)
             flash("Error al actualizar la transferencia: " + str(e))
             return redirect(url_for("transferencias.editar_transferencia", transfer_id=transfer_id))
-    current_date = transferencia.get("fecha", datetime.now(local_tz).strftime("%Y-%m-%d"))
+    current_date = transferencia.get("fecha", adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d"))
     try:
         response_pagadores = supabase.table("pagadores").select("cliente").execute()
         cliente_pagadores = [p["cliente"] for p in response_pagadores.data] if response_pagadores.data else []
@@ -718,7 +741,7 @@ def index():
         logging.error("Error al cargar los pedidos: %s", e)
         flash("Error al cargar los pedidos: " + str(e))
         pedidos_data, clientes = [], []
-    current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    current_date = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     return render_template("pedidos.html", pedidos=pedidos_data, cliente=clientes, active_page="pedidos",
                            current_date=current_date)
 
@@ -747,7 +770,7 @@ def nuevo():
             logging.error("Error al insertar pedido: %s", e)
             flash("Error al insertar pedido: " + str(e))
             return redirect(url_for("pedidos.nuevo"))
-    current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+    current_date = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     return render_template("nuevo_pedido.html", cliente_pagadores=cliente_pagadores, current_date=current_date,
                            active_page="pedidos")
 
@@ -799,7 +822,7 @@ def editar(pedido_id):
                 try:
                     supabase.table("pedidos_log").insert({
                         "pedido_id": pedido_id, "usuario": session.get("email"), "cambios": cambios_str,
-                        "fecha": datetime.now(local_tz).isoformat()
+                        "fecha": adjust_datetime(datetime.now(local_tz)).isoformat()
                     }).execute()
                 except Exception as log_error:
                     logging.error("Error al insertar en el log de cambios: %s", log_error)
@@ -821,7 +844,7 @@ dashboard_bp = Blueprint("dashboard", __name__)
 @cache.cached(timeout=60, query_string=True)
 def index():
     try:
-        current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+        current_date = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
         fecha_inicio = request.args.get("fecha_inicio", current_date)
         fecha_fin = request.args.get("fecha_fin", current_date)
         rpc_response = supabase.rpc("get_dashboard_aggregates",
@@ -843,7 +866,7 @@ def index():
         flash("Error al generar el dashboard: " + str(e))
         dashboard_list = []
         global_total_brs = global_total_clp = global_total_pagos = global_total_saldo = 0
-        current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+        current_date = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     return render_template("dashboard.html", dashboard_list=dashboard_list, current_date=current_date,
                            global_total_brs=global_total_brs, global_total_clp=global_total_clp,
                            global_total_pagos=global_total_pagos, global_total_saldo=global_total_saldo,
@@ -854,7 +877,7 @@ def index():
 @cache.cached(timeout=60, query_string=True)
 def detalle(cliente):
     try:
-        current_date = datetime.now(local_tz).strftime("%Y-%m-%d")
+        current_date = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
         fecha_inicio = request.args.get("fecha_inicio", current_date)
         fecha_fin = request.args.get("fecha_fin", current_date)
         try:
@@ -911,7 +934,7 @@ def calcular_margen():
 def tasa_compras():
     fecha = request.args.get("fecha")
     if not fecha:
-        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     inicio = fecha + "T00:00:00"
     fin = fecha + "T23:59:59"
     try:
@@ -965,9 +988,9 @@ def ingresar_usdt():
             costo_real = amount
             commission = 0
             createtime = request.form.get("createtime")
-            # Asegurarse de que la fecha está en la zona horaria correcta
+            # Asegurarse de que la fecha está en la zona horaria correcta y ajustar
             dt_createtime = datetime.strptime(createtime, "%Y-%m-%dT%H:%M")
-            dt_createtime = local_tz.localize(dt_createtime)
+            dt_createtime = adjust_datetime(dt_createtime)
             createtime = dt_createtime.isoformat()
             hash_input = f"{totalprice}{tasa}{tradetype}{fiat}{asset}{createtime}"
             ordernumber = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()[:20]
@@ -992,8 +1015,8 @@ def ingresar_usdt():
             flash("Error al ingresar la compra de USDT: " + str(e))
             return redirect(url_for("admin.ingresar_usdt"))
     
-    # Asegurarse de que la fecha actual está en la zona horaria correcta
-    current_datetime = datetime.now(local_tz).strftime("%Y-%m-%dT%H:%M")
+    # Asegurarse de que la fecha actual está en la zona horaria correcta y ajustada
+    current_datetime = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%dT%H:%M")
     tradetype_options = ["BUY", "SELL"]
     fiat_options = ["CLP", "VES", "USD"]
     
@@ -1002,8 +1025,7 @@ def ingresar_usdt():
                          active_page="admin", 
                          current_datetime=current_datetime,
                          tradetype_options=tradetype_options, 
-                         fiat_options=fiat_options,
-                         totalprice="")  # Enviamos un string vacío explícitamente
+                         fiat_options=fiat_options)
 
 @admin_bp.route("/tasa_actual", methods=["GET"])
 @login_required
@@ -1092,7 +1114,7 @@ def cierre_dia():
                     supabase.table("pagos_procesados").insert({
                         "transferencia_id": p["id"],
                         "hash": hash_actual,
-                        "fecha_procesada": datetime.now(local_tz).strftime("%Y-%m-%d")
+                        "fecha_procesada": adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
                     }).execute()
             clientes = set(list(pedidos_totales.keys()) + list(pagos_totales.keys()))
             for cliente in clientes:
@@ -1128,7 +1150,7 @@ def margen():
 def resumen_compras_usdt():
     fecha = request.args.get("fecha")
     if not fecha:
-        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     
     inicio = fecha + "T00:00:00"
     fin = fecha + "T23:59:59"
@@ -1203,7 +1225,7 @@ def resumen_compras_usdt():
 def resumen_ventas_usdt():
     fecha = request.args.get("fecha")
     if not fecha:
-        fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+        fecha = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
     
     inicio = fecha + "T00:00:00"
     fin = fecha + "T23:59:59"
@@ -1386,7 +1408,7 @@ app.register_blueprint(grafico_bp, url_prefix="/grafico")
 
 def get_current_datetime():
     """Helper function to get current datetime in local timezone"""
-    return datetime.now(local_tz)
+    return adjust_datetime(datetime.now(local_tz))
 
 def format_datetime_with_timezone(dt):
     """Helper function to format datetime with timezone"""
@@ -1396,6 +1418,7 @@ def format_datetime_with_timezone(dt):
         dt = datetime.fromisoformat(dt)
     if dt.tzinfo is None:
         dt = local_tz.localize(dt)
+    dt = adjust_datetime(dt)
     return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
 
 # Agregar filtro para formatear moneda

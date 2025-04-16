@@ -223,7 +223,7 @@ async def manejar_compras(message):
         if len(parts) > 1:
             fecha = parts[1]
         else:
-            fecha = datetime.now(local_tz).strftime("%Y-%m-%d")
+            fecha = adjust_datetime(datetime.now(local_tz)).strftime("%Y-%m-%d")
 
         inicio = f"{fecha}T00:00:00"
         fin = f"{fecha}T23:59:59"
