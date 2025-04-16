@@ -75,7 +75,7 @@ def ejecutar_escaneo_binance(fecha_escaneo=None):
             # se convierte a datetime con zona UTC y luego se transforma a la zona local.
             if 'createTime' in df.columns:
                 df['createTime'] = pd.to_datetime(df['createTime'], unit='ms', errors='coerce', utc=True)
-                df['createTime'] = df['createTime'].dt.tz_convert('America/Santiago')
+                # No aplicar tz_convert aquí, dejamos la hora en UTC
                 df['createTime'] = df['createTime'].dt.floor('s')
             else:
                 logging.error("La columna 'createTime' no existe en los datos.")
